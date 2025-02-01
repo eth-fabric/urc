@@ -31,6 +31,8 @@ contract DummySlasherTest is UnitTestHelper {
     DummySlasher dummySlasher;
     BLS.G1Point delegatePubKey;
     uint256 collateral = 100 ether;
+    uint256 commitmentSecretKey;
+    address commitmentKey;
 
     function setUp() public {
         registry = new Registry();
@@ -38,6 +40,7 @@ contract DummySlasherTest is UnitTestHelper {
         vm.deal(operator, 100 ether);
         vm.deal(challenger, 100 ether);
         delegatePubKey = BLS.toPublicKey(SECRET_KEY_2);
+        (commitmentKey, commitmentSecretKey) = makeAddrAndKey("commitmentsKey");
     }
 
     function testDummySlasherUpdatesRegistry() public {
@@ -46,10 +49,12 @@ contract DummySlasherTest is UnitTestHelper {
             collateral: collateral,
             withdrawalAddress: operator,
             delegateSecretKey: SECRET_KEY_2,
+            commitmentSecretKey: commitmentSecretKey,
+            commitmentKey: commitmentKey,
             slasher: address(dummySlasher),
             domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
             metadata: "",
-            validUntil: uint64(UINT256_MAX)
+            slot: uint64(UINT256_MAX)
         });
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
@@ -118,10 +123,12 @@ contract DummySlasherTest is UnitTestHelper {
             collateral: collateral,
             withdrawalAddress: operator,
             delegateSecretKey: SECRET_KEY_2,
+            commitmentSecretKey: commitmentSecretKey,
+            commitmentKey: commitmentKey,
             slasher: address(dummySlasher),
             domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
             metadata: "",
-            validUntil: uint64(UINT256_MAX)
+            slot: uint64(UINT256_MAX)
         });
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
@@ -149,10 +156,12 @@ contract DummySlasherTest is UnitTestHelper {
             collateral: collateral,
             withdrawalAddress: operator,
             delegateSecretKey: SECRET_KEY_2,
+            commitmentSecretKey: commitmentSecretKey,
+            commitmentKey: commitmentKey,
             slasher: address(dummySlasher),
             domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
             metadata: "",
-            validUntil: uint64(UINT256_MAX)
+            slot: uint64(UINT256_MAX)
         });
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
@@ -175,10 +184,12 @@ contract DummySlasherTest is UnitTestHelper {
             collateral: collateral,
             withdrawalAddress: operator,
             delegateSecretKey: SECRET_KEY_2,
+            commitmentSecretKey: commitmentSecretKey,
+            commitmentKey: commitmentKey,
             slasher: address(dummySlasher),
             domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
             metadata: "",
-            validUntil: uint64(UINT256_MAX)
+            slot: uint64(UINT256_MAX)
         });
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
@@ -210,10 +221,12 @@ contract DummySlasherTest is UnitTestHelper {
             collateral: dummySlasher.SLASH_AMOUNT_GWEI() * 1 gwei - 1, // less than the slash amount
             withdrawalAddress: operator,
             delegateSecretKey: SECRET_KEY_2,
+            commitmentSecretKey: commitmentSecretKey,
+            commitmentKey: commitmentKey,
             slasher: address(dummySlasher),
             domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
             metadata: "",
-            validUntil: uint64(UINT256_MAX)
+            slot: uint64(UINT256_MAX)
         });
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
@@ -245,10 +258,12 @@ contract DummySlasherTest is UnitTestHelper {
             collateral: collateral,
             withdrawalAddress: address(rejectEther),
             delegateSecretKey: SECRET_KEY_2,
+            commitmentSecretKey: commitmentSecretKey,
+            commitmentKey: commitmentKey,
             slasher: address(dummySlasher),
             domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
             metadata: "",
-            validUntil: uint64(UINT256_MAX)
+            slot: uint64(UINT256_MAX)
         });
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
@@ -276,10 +291,12 @@ contract DummySlasherTest is UnitTestHelper {
             collateral: collateral,
             withdrawalAddress: operator,
             delegateSecretKey: SECRET_KEY_2,
+            commitmentSecretKey: commitmentSecretKey,
+            commitmentKey: commitmentKey,
             slasher: address(dummySlasher),
             domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
             metadata: "",
-            validUntil: uint64(UINT256_MAX)
+            slot: uint64(UINT256_MAX)
         });
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
@@ -367,10 +384,12 @@ contract DummySlasherTest is UnitTestHelper {
             collateral: collateral,
             withdrawalAddress: operator,
             delegateSecretKey: SECRET_KEY_2,
+            commitmentSecretKey: commitmentSecretKey,
+            commitmentKey: commitmentKey,
             slasher: address(dummySlasher),
             domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
             metadata: "",
-            validUntil: uint64(UINT256_MAX)
+            slot: uint64(UINT256_MAX)
         });
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
@@ -441,10 +460,12 @@ contract DummySlasherTest is UnitTestHelper {
             collateral: collateral,
             withdrawalAddress: address(0),
             delegateSecretKey: SECRET_KEY_2,
+            commitmentSecretKey: commitmentSecretKey,
+            commitmentKey: commitmentKey,
             slasher: address(dummySlasher),
             domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
             metadata: "",
-            validUntil: uint64(UINT256_MAX)
+            slot: uint64(UINT256_MAX)
         });
 
         (RegisterAndDelegateResult memory result,) = registerAndDelegateReentrant(params);

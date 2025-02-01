@@ -55,7 +55,7 @@ contract InclusionPreconfSlasher is ISlasher, PreconfStructs {
 
     // claim that a transaction was not included in a block
     function createChallenge(
-        PreconfStructs.SignedCommitment calldata commitment,
+        SignedCommitmentTemp calldata commitment,
         ISlasher.SignedDelegation calldata signedDelegation
     ) external payable returns (bytes32 challengeID) {
         // Check that the attached bond amount is correct
@@ -75,9 +75,9 @@ contract InclusionPreconfSlasher is ISlasher, PreconfStructs {
         address commitmentSigner = abi.decode(signedDelegation.delegation.metadata, (address));
 
         // Check if the delegation applies to the slot of the commitment
-        if (signedDelegation.delegation.validUntil < commitment.slot) {
-            revert DelegationExpired();
-        }
+        // if (signedDelegation.delegation.validUntil < commitment.slot) { // todo uncomment 
+        //     revert DelegationExpired();
+        // }
 
         // save the challenge
         challenges[challengeID] = Challenge({
@@ -90,7 +90,7 @@ contract InclusionPreconfSlasher is ISlasher, PreconfStructs {
     // on success, the caller receives the challenge bond and the challenge is deleted
     function proveChallengeFraudulent(
         ISlasher.Delegation calldata delegation,
-        SignedCommitment calldata commitment,
+        SignedCommitmentTemp calldata commitment,
         InclusionProof calldata proof
     ) external {
         // recover the challenge
@@ -133,7 +133,7 @@ contract InclusionPreconfSlasher is ISlasher, PreconfStructs {
         }
 
         // Recover the commitment from the evidence
-        SignedCommitment memory commitment = abi.decode(evidence, (SignedCommitment));
+        SignedCommitmentTemp memory commitment = abi.decode(evidence, (SignedCommitmentTemp));
 
         // recover the challenge ID from the commitment
         bytes32 challengeID = keccak256(abi.encode(commitment, delegation));
@@ -167,7 +167,7 @@ contract InclusionPreconfSlasher is ISlasher, PreconfStructs {
     }
 
     function _verifyInclusionProof(
-        SignedCommitment memory commitment,
+        SignedCommitmentTemp memory commitment,
         InclusionProof memory proof,
         address commitmentSigner
     ) internal {
@@ -261,7 +261,7 @@ contract InclusionPreconfSlasher is ISlasher, PreconfStructs {
     /// @return commitmentSigner The signer of the commitment.
     /// @return transactionData The decoded transaction data of the committed transaction.
     function _recoverCommitmentData(
-        SignedCommitment memory commitment
+        SignedCommitmentTemp memory commitment
     )
         internal
         pure
@@ -289,7 +289,7 @@ contract InclusionPreconfSlasher is ISlasher, PreconfStructs {
     /// @param commitment The signed commitment to compute the ID for.
     /// @return commitmentID The computed commitment ID.
     function _computeCommitmentID(
-        SignedCommitment memory commitment
+        SignedCommitmentTemp memory commitment
     ) internal pure returns (bytes32) {
         return
             keccak256(

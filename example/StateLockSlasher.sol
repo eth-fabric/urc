@@ -60,17 +60,17 @@ contract StateLockSlasher is ISlasher, PreconfStructs {
         // commitment: signature to EXCLUDE a tx
         // proof: MPT inclusion proof
         (
-            SignedCommitment memory commitment,
+            SignedCommitmentTemp memory commitment,
             InclusionProof memory proof
         ) = abi.decode(
                 evidence,
-                (SignedCommitment, InclusionProof)
+                (SignedCommitmentTemp, InclusionProof)
             );
         
         // Check if the delegation applies to the slot of the commitment
-        if (delegation.validUntil < commitment.slot) {
-            revert DelegationExpired();
-        }
+        // if (delegation.validUntil < commitment.slot) { // todo uncomment
+        //     revert DelegationExpired();
+        // }
 
         // If the inclusion proof is valid (doesn't revert) they should be slashed for not excluding the transaction
         _verifyInclusionProof(commitment, proof, commitmentSigner);
@@ -85,7 +85,7 @@ contract StateLockSlasher is ISlasher, PreconfStructs {
     }
 
     function _verifyInclusionProof(
-        SignedCommitment memory commitment,
+        SignedCommitmentTemp memory commitment,
         InclusionProof memory proof,
         address commitmentSigner
     ) internal {
@@ -179,7 +179,7 @@ contract StateLockSlasher is ISlasher, PreconfStructs {
     /// @return commitmentSigner The signer of the commitment.
     /// @return transactionData The decoded transaction data of the committed transaction.
     function _recoverCommitmentData(
-        SignedCommitment memory commitment
+        SignedCommitmentTemp memory commitment
     )
         internal
         pure
@@ -207,7 +207,7 @@ contract StateLockSlasher is ISlasher, PreconfStructs {
     /// @param commitment The signed commitment to compute the ID for.
     /// @return commitmentID The computed commitment ID.
     function _computeCommitmentID(
-        SignedCommitment memory commitment
+        SignedCommitmentTemp memory commitment
     ) internal pure returns (bytes32) {
         return
             keccak256(

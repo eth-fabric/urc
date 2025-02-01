@@ -33,12 +33,16 @@ contract StateLockSlasherTest is UnitTestHelper {
     uint256 slashAmountGwei = 1 ether / 1 gwei; // slash 1 ether
     uint256 rewardAmountGwei = 0.1 ether / 1 gwei; // reward 0.1 ether
     uint256 collateral = 1.1 ether;
+    uint256 commitmentSecretKey;
+    address commitmentKey;
 
     function setUp() public {
         vm.createSelectFork(vm.rpcUrl("mainnet"));
         slasher = new StateLockSlasher(slashAmountGwei, rewardAmountGwei);
         registry = new Registry();
+        (commitmentKey, commitmentSecretKey) = makeAddrAndKey("commitmentsKey");
         delegatePubKey = BLS.toPublicKey(SECRET_KEY_2);
+        vm.deal(commitmentKey, 100 ether);
     }
 
     function testProveTransactionInclusion() public {
@@ -112,10 +116,12 @@ contract StateLockSlasherTest is UnitTestHelper {
             collateral: collateral,
             withdrawalAddress: operator,
             delegateSecretKey: SECRET_KEY_2,
+            commitmentSecretKey: commitmentSecretKey,
+            commitmentKey: commitmentKey,
             slasher: address(slasher),
             domainSeparator: slasher.DOMAIN_SEPARATOR(),
             metadata: metadata,
-            validUntil: uint64(UINT256_MAX)
+            slot: uint64(UINT256_MAX)
         });
 
         // Register operator to URC and signs delegation message
@@ -143,7 +149,7 @@ contract StateLockSlasherTest is UnitTestHelper {
         vm.warp(slasher._getTimestampFromSlot(9994114)); // https://etherscan.io/block/20785012
 
         // Delegate signs a commitment to exclude a TX
-        PreconfStructs.SignedCommitment memory commitment =
+        PreconfStructs.SignedCommitmentTemp memory commitment =
             _createStateLockCommitment(exclusionBlockNumber, id, delegate, delegatePK);
 
         // Build the inclusion proof to prove failure to exclude
@@ -227,7 +233,7 @@ contract StateLockSlasherTest is UnitTestHelper {
     function _createStateLockCommitment(uint256 blockNumber, uint256 id, address delegate, uint256 delegatePK)
         internal
         view
-        returns (PreconfStructs.SignedCommitment memory commitment)
+        returns (PreconfStructs.SignedCommitmentTemp memory commitment)
     {
         // pattern: ./test/testdata/signed_tx_{blockNumber}_{id}.json
         string memory base = "./test/testdata/signed_tx_";
