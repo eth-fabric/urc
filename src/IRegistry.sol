@@ -175,6 +175,8 @@ interface IRegistry {
         bytes32 registrationRoot,
         BLS.G2Point calldata registrationSignature,
         bytes32[] calldata proof,
-        uint256 leafIndex
+        uint256 leafIndex,
+        ISlasher.SignedDelegation calldata delegationOne,
+        ISlasher.SignedDelegation calldata delegationTwo
     ) external;
 }
