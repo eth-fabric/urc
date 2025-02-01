@@ -291,6 +291,95 @@ contract Registry is IRegistry {
         emit OperatorSlashed(registrationRoot, slashAmountGwei, rewardAmountGwei, delegation.delegation.proposerPubKey);
     }
 
+    /// @notice Slash an operator for equivocation (signing two different delegations for the same slot)
+    /// @dev The function will slash the operator's collateral and transfer `MIN_COLLATERAL` to the caller
+    /// @param registrationRoot The merkle root generated and stored from the register() function
+    /// @param registrationSignature The signature from the operator's previously registered `Registration`
+    /// @param proof The merkle proof to verify the operator's key is in the registry
+    /// @param leafIndex The index of the leaf in the merkle tree
+    /// @param delegationOne The first SignedDelegation signed by the operator's BLS key
+    /// @param delegationTwo The second SignedDelegation signed by the operator's BLS key
+    /// @dev Reverts if:
+    /// @dev - The delegations are the same (DelegationsAreSame)
+    /// @dev - The slashing has already occurred (SlashingAlreadyOccurred)
+    /// @dev - The fraud proof window has not passed (FraudProofWindowNotMet)
+    /// @dev - The operator has already unregistered and delay passed (OperatorAlreadyUnregistered)
+    /// @dev - The slash window has expired (SlashWindowExpired)
+    /// @dev - Either delegation is invalid (InvalidDelegation)
+    /// @dev - The delegations are for different slots (DifferentSlots)
+    function slashEquivocation(
+        bytes32 registrationRoot,
+        BLS.G2Point calldata registrationSignature,
+        bytes32[] calldata proof,
+        uint256 leafIndex,
+        ISlasher.SignedDelegation calldata delegationOne,
+        ISlasher.SignedDelegation calldata delegationTwo
+    ) external {
+        Operator storage operator = registrations[registrationRoot];
+
+        bytes32 slashingDigest = keccak256(abi.encode(delegationOne, delegationTwo, registrationRoot));
+
+        // verify the delegations are not the same
+        if (keccak256(abi.encode(delegationOne)) == keccak256(abi.encode(delegationTwo))) {
+            revert DelegationsAreSame();
+        }
+
+        if (slashedBefore[slashingDigest]) {
+            revert SlashingAlreadyOccurred();
+        }
+
+        if (block.number < operator.registeredAt + FRAUD_PROOF_WINDOW) {
+            revert FraudProofWindowNotMet();
+        }
+
+        if (
+            operator.unregisteredAt != type(uint32).max
+                && block.number > operator.unregisteredAt + operator.unregistrationDelay
+        ) {
+            revert OperatorAlreadyUnregistered();
+        }
+
+        if (operator.slashedAt != 0 && block.number > operator.slashedAt + SLASH_WINDOW) {
+            revert SlashWindowExpired();
+        }
+
+        // verify both delegations
+        uint256 collateralGweiOne =
+            _verifyDelegation(registrationRoot, registrationSignature, proof, leafIndex, delegationOne);
+        uint256 collateralGweiTwo =
+            _verifyDelegation(registrationRoot, registrationSignature, proof, leafIndex, delegationTwo);
+
+        // error if either delegation is invalid
+        if (collateralGweiOne == 0 || collateralGweiTwo == 0) {
+            revert InvalidDelegation();
+        }
+
+        // error if the delegations are for different slots
+        if (delegationOne.delegation.slot != delegationTwo.delegation.slot) {
+            revert DifferentSlots();
+        }
+
+        // Save timestamp only once
+        if (operator.slashedAt == 0) {
+            operator.slashedAt = uint32(block.number);
+        }
+
+        // Decrement operator's collateral
+        operator.collateralGwei -= uint56(MIN_COLLATERAL / 1 gwei);
+
+        // Save both permutations of the slashing digest
+        slashedBefore[slashingDigest] = true;
+        slashedBefore[keccak256(abi.encode(delegationTwo, delegationOne, registrationRoot))] = true;
+
+        // reward the challenger
+        (bool success,) = msg.sender.call{ value: MIN_COLLATERAL }("");
+        if (!success) {
+            revert EthTransferFailed();
+        }
+
+        emit OperatorEquivocated(registrationRoot, MIN_COLLATERAL, delegationOne.delegation.proposerPubKey);
+    }
+
     /// @notice Adds collateral to an Operator struct
     /// @dev The function will revert if the operator does not exist or if the collateral amount overflows the `collateralGwei` field.
     /// @param registrationRoot The merkle root generated and stored from the register() function

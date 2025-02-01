@@ -74,6 +74,12 @@ interface IRegistry {
         bytes32 registrationRoot, uint256 slashAmountGwei, uint256 rewardAmountGwei, BLS.G1Point pubkey
     );
 
+    /// @notice Emitted when an operator is slashed for equivocation
+    /// @param registrationRoot The merkle root of the registration merkle tree
+    /// @param rewardAmountGwei The amount of GWEI rewarded to the caller
+    /// @param pubkey The BLS public key
+    event OperatorEquivocated(bytes32 registrationRoot, uint256 rewardAmountGwei, BLS.G1Point pubkey);
+
     /// @notice Emitted when an operator is unregistered
     /// @param registrationRoot The merkle root of the registration merkle tree
     /// @param unregisteredAt The block number when the operator was unregistered
@@ -121,7 +127,9 @@ interface IRegistry {
     error NotSlashed();
     error SlashWindowNotMet();
     error UnauthorizedCommitment();
-
+    error InvalidDelegation();
+    error DifferentSlots();
+    error DelegationsAreSame();
     /**
      *
      *                                *
@@ -129,6 +137,7 @@ interface IRegistry {
      *                                *
      *
      */
+
     function register(Registration[] calldata registrations, address withdrawalAddress, uint16 unregistrationDelay)
         external
         payable
@@ -161,4 +170,11 @@ interface IRegistry {
         ISlasher.SignedCommitment calldata commitment,
         bytes calldata evidence
     ) external returns (uint256 slashAmountGwei, uint256 rewardAmountGwei);
+
+    function slashEquivocation(
+        bytes32 registrationRoot,
+        BLS.G2Point calldata registrationSignature,
+        bytes32[] calldata proof,
+        uint256 leafIndex
+    ) external;
 }

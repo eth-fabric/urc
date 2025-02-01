@@ -485,6 +485,361 @@ contract DummySlasherTest is UnitTestHelper {
         );
     }
 
+    function testEquivocation() public {
+        RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
+            proposerSecretKey: SECRET_KEY_1,
+            collateral: collateral,
+            withdrawalAddress: operator,
+            delegateSecretKey: SECRET_KEY_2,
+            commitmentSecretKey: commitmentSecretKey,
+            commitmentKey: commitmentKey,
+            slasher: address(dummySlasher),
+            domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
+            metadata: "",
+            slot: uint64(UINT256_MAX)
+        });
+
+        RegisterAndDelegateResult memory result = registerAndDelegate(params);
+
+        // Setup proof
+        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        uint256 leafIndex = 0;
+        bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
+
+        // skip past fraud proof window
+        vm.roll(block.timestamp + registry.FRAUD_PROOF_WINDOW() + 1);
+
+        // Sign delegation
+        ISlasher.Delegation memory delegationTwo = ISlasher.Delegation({
+            proposerPubKey: BLS.toPublicKey(params.proposerSecretKey),
+            constraintsKey: BLS.toPublicKey(params.delegateSecretKey),
+            commitmentsKey: params.commitmentKey,
+            slasher: params.slasher,
+            slot: params.slot,
+            metadata: "different metadata"
+        });
+
+        ISlasher.SignedDelegation memory signedDelegationTwo =
+            signDelegation(params.proposerSecretKey, delegationTwo, params.domainSeparator);
+
+        // submit both delegations
+        uint256 challengerBalanceBefore = challenger.balance;
+        vm.startPrank(challenger);
+        registry.slashEquivocation(
+            result.registrationRoot,
+            result.registrations[leafIndex].signature,
+            proof,
+            leafIndex,
+            result.signedDelegation,
+            signedDelegationTwo
+        );
+
+        IRegistry.Operator memory operatorData = getRegistrationData(result.registrationRoot);
+
+        // verify operator's collateralGwei is decremented by MIN_COLLATERAL
+        assertEq(
+            operatorData.collateralGwei,
+            (collateral - registry.MIN_COLLATERAL()) / 1 gwei,
+            "collateralGwei not decremented"
+        );
+
+        assertEq(
+            challenger.balance, challengerBalanceBefore + registry.MIN_COLLATERAL(), "challenger did not receive reward"
+        );
+    }
+
+    function testRevertEquivocationFraudProofWindowNotMet() public {
+        RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
+            proposerSecretKey: SECRET_KEY_1,
+            collateral: collateral,
+            withdrawalAddress: operator,
+            delegateSecretKey: SECRET_KEY_2,
+            commitmentSecretKey: commitmentSecretKey,
+            commitmentKey: commitmentKey,
+            slasher: address(dummySlasher),
+            domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
+            metadata: "",
+            slot: uint64(UINT256_MAX)
+        });
+
+        RegisterAndDelegateResult memory result = registerAndDelegate(params);
+
+        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory proof = MerkleTree.generateProof(leaves, 0);
+
+        // Create second delegation with different metadata
+        ISlasher.Delegation memory delegationTwo = ISlasher.Delegation({
+            proposerPubKey: BLS.toPublicKey(params.proposerSecretKey),
+            constraintsKey: BLS.toPublicKey(params.delegateSecretKey),
+            commitmentsKey: params.commitmentKey,
+            slasher: params.slasher,
+            slot: params.slot,
+            metadata: "different metadata"
+        });
+
+        ISlasher.SignedDelegation memory signedDelegationTwo =
+            signDelegation(params.proposerSecretKey, delegationTwo, params.domainSeparator);
+
+        vm.startPrank(challenger);
+        vm.expectRevert(IRegistry.FraudProofWindowNotMet.selector);
+        registry.slashEquivocation(
+            result.registrationRoot,
+            result.registrations[0].signature,
+            proof,
+            0,
+            result.signedDelegation,
+            signedDelegationTwo
+        );
+    }
+
+    function testRevertEquivocationNotRegisteredKey() public {
+        RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
+            proposerSecretKey: SECRET_KEY_1,
+            collateral: collateral,
+            withdrawalAddress: operator,
+            delegateSecretKey: SECRET_KEY_2,
+            commitmentSecretKey: commitmentSecretKey,
+            commitmentKey: commitmentKey,
+            slasher: address(dummySlasher),
+            domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
+            metadata: "",
+            slot: uint64(UINT256_MAX)
+        });
+
+        RegisterAndDelegateResult memory result = registerAndDelegate(params);
+
+        // Create invalid proof
+        bytes32[] memory invalidProof = new bytes32[](1);
+        invalidProof[0] = bytes32(0);
+
+        // Create second delegation
+        ISlasher.Delegation memory delegationTwo = ISlasher.Delegation({
+            proposerPubKey: BLS.toPublicKey(params.proposerSecretKey),
+            constraintsKey: BLS.toPublicKey(params.delegateSecretKey),
+            commitmentsKey: params.commitmentKey,
+            slasher: params.slasher,
+            slot: params.slot,
+            metadata: "different metadata"
+        });
+
+        ISlasher.SignedDelegation memory signedDelegationTwo =
+            signDelegation(params.proposerSecretKey, delegationTwo, params.domainSeparator);
+
+        vm.roll(block.timestamp + registry.FRAUD_PROOF_WINDOW() + 1);
+
+        vm.startPrank(challenger);
+        vm.expectRevert(IRegistry.NotRegisteredKey.selector);
+        registry.slashEquivocation(
+            result.registrationRoot,
+            result.registrations[0].signature,
+            invalidProof,
+            0,
+            result.signedDelegation,
+            signedDelegationTwo
+        );
+    }
+
+    function testRevertEquivocationDelegationsAreSame() public {
+        RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
+            proposerSecretKey: SECRET_KEY_1,
+            collateral: collateral,
+            withdrawalAddress: operator,
+            delegateSecretKey: SECRET_KEY_2,
+            commitmentSecretKey: commitmentSecretKey,
+            commitmentKey: commitmentKey,
+            slasher: address(dummySlasher),
+            domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
+            metadata: "",
+            slot: uint64(UINT256_MAX)
+        });
+
+        RegisterAndDelegateResult memory result = registerAndDelegate(params);
+
+        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory proof = MerkleTree.generateProof(leaves, 0);
+
+        vm.roll(block.timestamp + registry.FRAUD_PROOF_WINDOW() + 1);
+
+        vm.startPrank(challenger);
+        vm.expectRevert(IRegistry.DelegationsAreSame.selector);
+        registry.slashEquivocation(
+            result.registrationRoot,
+            result.registrations[0].signature,
+            proof,
+            0,
+            result.signedDelegation,
+            result.signedDelegation // Same delegation
+        );
+    }
+
+    function testRevertEquivocationDifferentSlots() public {
+        RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
+            proposerSecretKey: SECRET_KEY_1,
+            collateral: collateral,
+            withdrawalAddress: operator,
+            delegateSecretKey: SECRET_KEY_2,
+            commitmentSecretKey: commitmentSecretKey,
+            commitmentKey: commitmentKey,
+            slasher: address(dummySlasher),
+            domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
+            metadata: "",
+            slot: 1000
+        });
+
+        RegisterAndDelegateResult memory result = registerAndDelegate(params);
+
+        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory proof = MerkleTree.generateProof(leaves, 0);
+
+        // Create second delegation with different slot
+        ISlasher.Delegation memory delegationTwo = ISlasher.Delegation({
+            proposerPubKey: BLS.toPublicKey(params.proposerSecretKey),
+            constraintsKey: BLS.toPublicKey(params.delegateSecretKey),
+            commitmentsKey: params.commitmentKey,
+            slasher: params.slasher,
+            slot: params.slot + 1, // Different slot
+            metadata: "different metadata"
+        });
+
+        ISlasher.SignedDelegation memory signedDelegationTwo =
+            signDelegation(params.proposerSecretKey, delegationTwo, params.domainSeparator);
+
+        vm.roll(block.timestamp + registry.FRAUD_PROOF_WINDOW() + 1);
+
+        vm.startPrank(challenger);
+        vm.expectRevert(IRegistry.DifferentSlots.selector);
+        registry.slashEquivocation(
+            result.registrationRoot,
+            result.registrations[0].signature,
+            proof,
+            0,
+            result.signedDelegation,
+            signedDelegationTwo
+        );
+    }
+
+    function testRevertEquivocationSlashingAlreadyOccurred() public {
+        RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
+            proposerSecretKey: SECRET_KEY_1,
+            collateral: collateral,
+            withdrawalAddress: operator,
+            delegateSecretKey: SECRET_KEY_2,
+            commitmentSecretKey: commitmentSecretKey,
+            commitmentKey: commitmentKey,
+            slasher: address(dummySlasher),
+            domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
+            metadata: "",
+            slot: uint64(UINT256_MAX)
+        });
+
+        RegisterAndDelegateResult memory result = registerAndDelegate(params);
+
+        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory proof = MerkleTree.generateProof(leaves, 0);
+
+        // Create second delegation
+        ISlasher.Delegation memory delegationTwo = ISlasher.Delegation({
+            proposerPubKey: BLS.toPublicKey(params.proposerSecretKey),
+            constraintsKey: BLS.toPublicKey(params.delegateSecretKey),
+            commitmentsKey: params.commitmentKey,
+            slasher: params.slasher,
+            slot: params.slot,
+            metadata: "different metadata"
+        });
+
+        ISlasher.SignedDelegation memory signedDelegationTwo =
+            signDelegation(params.proposerSecretKey, delegationTwo, params.domainSeparator);
+
+        vm.roll(block.timestamp + registry.FRAUD_PROOF_WINDOW() + 1);
+
+        vm.startPrank(challenger);
+        // First slash
+        registry.slashEquivocation(
+            result.registrationRoot,
+            result.registrations[0].signature,
+            proof,
+            0,
+            result.signedDelegation,
+            signedDelegationTwo
+        );
+
+        // Try to slash again with same delegations
+        vm.expectRevert(IRegistry.SlashingAlreadyOccurred.selector);
+        registry.slashEquivocation(
+            result.registrationRoot,
+            result.registrations[0].signature,
+            proof,
+            0,
+            result.signedDelegation,
+            signedDelegationTwo
+        );
+
+        // Try reversing the order of the delegations
+        vm.expectRevert(IRegistry.SlashingAlreadyOccurred.selector);
+        registry.slashEquivocation(
+            result.registrationRoot,
+            result.registrations[0].signature,
+            proof,
+            0,
+            signedDelegationTwo,
+            result.signedDelegation
+        );
+    }
+
+    function testRevertEquivocationOperatorAlreadyUnregistered() public {
+        RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
+            proposerSecretKey: SECRET_KEY_1,
+            collateral: collateral,
+            withdrawalAddress: operator,
+            delegateSecretKey: SECRET_KEY_2,
+            commitmentSecretKey: commitmentSecretKey,
+            commitmentKey: commitmentKey,
+            slasher: address(dummySlasher),
+            domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
+            metadata: "",
+            slot: uint64(UINT256_MAX)
+        });
+
+        RegisterAndDelegateResult memory result = registerAndDelegate(params);
+
+        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory proof = MerkleTree.generateProof(leaves, 0);
+
+        // Create second delegation
+        ISlasher.Delegation memory delegationTwo = ISlasher.Delegation({
+            proposerPubKey: BLS.toPublicKey(params.proposerSecretKey),
+            constraintsKey: BLS.toPublicKey(params.delegateSecretKey),
+            commitmentsKey: params.commitmentKey,
+            slasher: params.slasher,
+            slot: params.slot,
+            metadata: "different metadata"
+        });
+
+        ISlasher.SignedDelegation memory signedDelegationTwo =
+            signDelegation(params.proposerSecretKey, delegationTwo, params.domainSeparator);
+
+        // move past the fraud proof window
+        vm.roll(block.number + registry.FRAUD_PROOF_WINDOW() + 1);
+
+        // Unregister the operator
+        vm.startPrank(operator);
+        registry.unregister(result.registrationRoot);
+
+        // Move past unregistration delay
+        vm.roll(block.number + registry.MIN_UNREGISTRATION_DELAY() + 1);
+
+        vm.startPrank(challenger);
+        vm.expectRevert(IRegistry.OperatorAlreadyUnregistered.selector);
+        registry.slashEquivocation(
+            result.registrationRoot,
+            result.registrations[0].signature,
+            proof,
+            0,
+            result.signedDelegation,
+            signedDelegationTwo
+        );
+    }
+
     // For setup we register() and delegate to the dummy slasher
     // The registration's withdrawal address is the reentrant contract
     // Triggering a slash causes the reentrant contract to reenter the registry and call: addCollateral(), unregister(), claimCollateral(), slashCommitment()
