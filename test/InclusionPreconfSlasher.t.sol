@@ -15,13 +15,14 @@ import { SecureMerkleTrie } from "../example/lib/trie/SecureMerkleTrie.sol";
 import { TransactionDecoder } from "../example/lib/TransactionDecoder.sol";
 import { Registry } from "../src/Registry.sol";
 import { IRegistry } from "../src/IRegistry.sol";
+import { ISlasher } from "../src/ISlasher.sol";
 import { BLS } from "../src/lib/BLS.sol";
 import { MerkleTree } from "../src/lib/MerkleTree.sol";
 import { PreconfStructs } from "../example/PreconfStructs.sol";
 import { InclusionPreconfSlasher } from "../example/InclusionPreconfSlasher.sol";
 import { UnitTestHelper } from "./UnitTestHelper.sol";
 
-contract InclusionPreconfSlasherTest is UnitTestHelper {
+contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
     using RLPReader for bytes;
     using RLPReader for RLPReader.RLPItem;
     using BytesUtils for bytes;
@@ -47,7 +48,7 @@ contract InclusionPreconfSlasherTest is UnitTestHelper {
         vm.deal(commitmentKey, 100 ether);
     }
 
-    function setupRegistration(address operator, address delegate)
+    function setupRegistration(address operator, address delegate, uint64 slot)
         internal
         returns (RegisterAndDelegateResult memory result)
     {
@@ -65,7 +66,7 @@ contract InclusionPreconfSlasherTest is UnitTestHelper {
             slasher: address(slasher),
             domainSeparator: slasher.DOMAIN_SEPARATOR(),
             metadata: metadata,
-            slot: uint64(UINT256_MAX)
+            slot: slot
         });
 
         // Register operator to URC and signs delegation message
@@ -77,7 +78,7 @@ contract InclusionPreconfSlasherTest is UnitTestHelper {
         public
         returns (
             RegisterAndDelegateResult memory result,
-            PreconfStructs.SignedCommitmentTemp memory commitment,
+            ISlasher.SignedCommitment memory signedCommitment,
             PreconfStructs.InclusionProof memory inclusionProof
         )
     {
@@ -90,14 +91,16 @@ contract InclusionPreconfSlasherTest is UnitTestHelper {
         vm.warp(inclusionBlockNumber - registry.FRAUD_PROOF_WINDOW() * 12);
 
         // Register and delegate
-        result = setupRegistration(operator, delegate);
+        result = setupRegistration(operator, delegate, 9994114 - 100);
 
         // Advance over registration fraud proof window to the target slot
         vm.roll(inclusionBlockNumber);
         vm.warp(slasher._getTimestampFromSlot(9994114)); // https://etherscan.io/block/20785012
 
         // Delegate signs a commitment to include a TX
-        commitment = _createInclusionCommitment(inclusionBlockNumber, id, delegate, delegatePK);
+        TransactionCommitment memory txCommitment =
+            _createInclusionCommitment(inclusionBlockNumber, id, commitmentKey, commitmentSecretKey);
+        signedCommitment = basicCommitment(commitmentSecretKey, address(slasher), abi.encode(txCommitment));
 
         // Build the inclusion proof to prove failure to exclude
         string memory rawPreviousHeader = vm.readFile("./test/testdata/header_20785011.json");
@@ -128,42 +131,42 @@ contract InclusionPreconfSlasherTest is UnitTestHelper {
     function test_challenge() public {
         (
             RegisterAndDelegateResult memory result,
-            PreconfStructs.SignedCommitmentTemp memory commitment,
+            ISlasher.SignedCommitment memory signedCommitment,
             PreconfStructs.InclusionProof memory inclusionProof
         ) = setupSlash(1);
 
         bytes32 challengeID =
-            slasher.createChallenge{ value: slasher.CHALLENGE_BOND() }(commitment, result.signedDelegation);
-        assertEq(challengeID, keccak256(abi.encode(commitment, result.signedDelegation.delegation)));
+            slasher.createChallenge{ value: slasher.CHALLENGE_BOND() }(signedCommitment, result.signedDelegation);
+        assertEq(challengeID, keccak256(abi.encode(signedCommitment.commitment, result.signedDelegation.delegation)));
     }
 
     function test_revert_challenge_incorrectBond() public {
         (
             RegisterAndDelegateResult memory result,
-            PreconfStructs.SignedCommitmentTemp memory commitment,
+            ISlasher.SignedCommitment memory signedCommitment,
             PreconfStructs.InclusionProof memory inclusionProof
         ) = setupSlash(1);
 
         uint256 bond = slasher.CHALLENGE_BOND() - 1;
         // Try with incorrect bond amount
         vm.expectRevert(PreconfStructs.IncorrectChallengeBond.selector);
-        slasher.createChallenge{ value: bond }(commitment, result.signedDelegation);
+        slasher.createChallenge{ value: bond }(signedCommitment, result.signedDelegation);
     }
 
     function test_revert_challenge_alreadyExists() public {
         (
             RegisterAndDelegateResult memory result,
-            PreconfStructs.SignedCommitmentTemp memory commitment,
+            ISlasher.SignedCommitment memory signedCommitment,
             PreconfStructs.InclusionProof memory inclusionProof
         ) = setupSlash(1);
 
         uint256 bond = slasher.CHALLENGE_BOND();
         // Create first challenge
-        slasher.createChallenge{ value: bond }(commitment, result.signedDelegation);
+        slasher.createChallenge{ value: bond }(signedCommitment, result.signedDelegation);
 
         // Try to create duplicate challenge
         vm.expectRevert(PreconfStructs.ChallengeAlreadyExists.selector);
-        slasher.createChallenge{ value: bond }(commitment, result.signedDelegation);
+        slasher.createChallenge{ value: bond }(signedCommitment, result.signedDelegation);
     }
 
     function test_revert_challenge_expiredDelegation() public {
@@ -195,20 +198,23 @@ contract InclusionPreconfSlasherTest is UnitTestHelper {
         // Create commitment for expired delegation
         vm.roll(inclusionBlockNumber);
         vm.warp(slasher._getTimestampFromSlot(9994114)); // https://etherscan.io/block/20785012
-        PreconfStructs.SignedCommitmentTemp memory commitment =
+        TransactionCommitment memory commitment =
             _createInclusionCommitment(inclusionBlockNumber, 1, delegate, delegatePK);
+
+        ISlasher.SignedCommitment memory signedCommitment =
+            basicCommitment(commitmentSecretKey, address(slasher), abi.encode(commitment));
 
         // Try to create challenge with expired delegation
         uint256 bond = slasher.CHALLENGE_BOND();
         vm.expectRevert(PreconfStructs.DelegationExpired.selector);
-        slasher.createChallenge{ value: bond }(commitment, result.signedDelegation);
+        slasher.createChallenge{ value: bond }(signedCommitment, result.signedDelegation);
     }
 
     function test_slash() public {
         // Register at URC and generate slashable evidence
         (
             RegisterAndDelegateResult memory result,
-            PreconfStructs.SignedCommitmentTemp memory commitment,
+            ISlasher.SignedCommitment memory signedCommitment,
             PreconfStructs.InclusionProof memory inclusionProof
         ) = setupSlash(1);
 
@@ -220,7 +226,7 @@ contract InclusionPreconfSlasherTest is UnitTestHelper {
 
         // Create challenge
         vm.prank(challenger);
-        bytes32 challengeID = slasher.createChallenge{ value: bond }(commitment, result.signedDelegation);
+        bytes32 challengeID = slasher.createChallenge{ value: bond }(signedCommitment, result.signedDelegation);
 
         // Verify challenger's balance decreased by bond amount
         assertEq(challenger.balance, challengerBalanceBefore - bond);
@@ -243,7 +249,8 @@ contract InclusionPreconfSlasherTest is UnitTestHelper {
             registrationProof,
             0, // leaf index
             result.signedDelegation,
-            abi.encode(commitment)
+            signedCommitment,
+            abi.encode(inclusionProof)
         );
 
         _verifySlashCommitmentBalances(
@@ -264,21 +271,22 @@ contract InclusionPreconfSlasherTest is UnitTestHelper {
         );
 
         // Verify the slashedBefore mapping is set
-        bytes32 slashingDigest = keccak256(abi.encode(result.signedDelegation, result.registrationRoot));
+        bytes32 slashingDigest =
+            keccak256(abi.encode(result.signedDelegation, signedCommitment, result.registrationRoot));
         assertEq(registry.slashedBefore(slashingDigest), true, "slashedBefore not set");
     }
 
     function test_revert_slash_wrongChallenger() public {
         (
             RegisterAndDelegateResult memory result,
-            PreconfStructs.SignedCommitmentTemp memory commitment,
+            ISlasher.SignedCommitment memory signedCommitment,
             PreconfStructs.InclusionProof memory inclusionProof
         ) = setupSlash(1);
 
         // Create challenge as the original challenger
         vm.prank(challenger);
         bytes32 challengeID =
-            slasher.createChallenge{ value: slasher.CHALLENGE_BOND() }(commitment, result.signedDelegation);
+            slasher.createChallenge{ value: slasher.CHALLENGE_BOND() }(signedCommitment, result.signedDelegation);
 
         // Skip ahead past the challenge window
         vm.warp(block.timestamp + slasher.CHALLENGE_WINDOW() + 1);
@@ -297,27 +305,30 @@ contract InclusionPreconfSlasherTest is UnitTestHelper {
             registrationProof,
             leafIndex,
             result.signedDelegation,
-            abi.encode(commitment)
+            signedCommitment,
+            abi.encode(inclusionProof)
         );
     }
 
     function test_revert_slash_notURC() public {
         (
             RegisterAndDelegateResult memory result,
-            PreconfStructs.SignedCommitmentTemp memory commitment,
+            ISlasher.SignedCommitment memory signedCommitment,
             PreconfStructs.InclusionProof memory inclusionProof
         ) = setupSlash(1);
 
         // Try to call slash directly (not through URC)
         vm.expectRevert(PreconfStructs.NotURC.selector);
-        slasher.slash(result.signedDelegation.delegation, abi.encode(commitment), address(0));
+        slasher.slash(
+            result.signedDelegation.delegation, signedCommitment.commitment, abi.encode(inclusionProof), address(0)
+        );
     }
 
     function test_proveChallengeFraudulent() public {
         // Register at URC and generate slashable evidence
         (
             RegisterAndDelegateResult memory result,
-            PreconfStructs.SignedCommitmentTemp memory commitment,
+            ISlasher.SignedCommitment memory signedCommitment,
             PreconfStructs.InclusionProof memory inclusionProof
         ) = setupSlash(1);
 
@@ -328,14 +339,14 @@ contract InclusionPreconfSlasherTest is UnitTestHelper {
 
         // Create challenge
         vm.prank(challenger);
-        bytes32 challengeID = slasher.createChallenge{ value: bond }(commitment, result.signedDelegation);
+        bytes32 challengeID = slasher.createChallenge{ value: bond }(signedCommitment, result.signedDelegation);
 
         // Verify challenger's balance decreased by bond amount
         assertEq(challenger.balance, challengerBalanceBefore - bond);
 
         // Prove the challenge is fraudulent (transaction was actually included)
         vm.prank(operator);
-        slasher.proveChallengeFraudulent(result.signedDelegation.delegation, commitment, inclusionProof);
+        slasher.proveChallengeFraudulent(result.signedDelegation.delegation, signedCommitment, inclusionProof);
 
         // Verify challenger lost their bond (transferred to operator)
         assertEq(operator.balance, operatorBalanceBefore + bond);
@@ -349,13 +360,13 @@ contract InclusionPreconfSlasherTest is UnitTestHelper {
     function test_revert_proveChallengeFraudulent_nonexistentChallenge() public {
         (
             RegisterAndDelegateResult memory result,
-            PreconfStructs.SignedCommitmentTemp memory commitment,
+            ISlasher.SignedCommitment memory signedCommitment,
             PreconfStructs.InclusionProof memory inclusionProof
         ) = setupSlash(1);
 
         // Try to prove fraudulent for a challenge that doesn't exist
         vm.expectRevert(PreconfStructs.ChallengeDoesNotExist.selector);
-        slasher.proveChallengeFraudulent(result.signedDelegation.delegation, commitment, inclusionProof);
+        slasher.proveChallengeFraudulent(result.signedDelegation.delegation, signedCommitment, inclusionProof);
     }
 
     // =========== Helper functions ===========
@@ -364,7 +375,7 @@ contract InclusionPreconfSlasherTest is UnitTestHelper {
     function _createInclusionCommitment(uint256 blockNumber, uint256 id, address delegate, uint256 delegatePK)
         internal
         view
-        returns (PreconfStructs.SignedCommitmentTemp memory commitment)
+        returns (TransactionCommitment memory commitment)
     {
         // pattern: ./test/testdata/signed_tx_{blockNumber}_{id}.json
         string memory base = "./test/testdata/signed_tx_";

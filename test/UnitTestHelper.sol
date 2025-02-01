@@ -156,6 +156,19 @@ contract UnitTestHelper is Test {
         );
     }
 
+    function basicCommitment(uint256 secretKey, address slasher, bytes memory payload)
+        public
+        view
+        returns (ISlasher.SignedCommitment memory signedCommitment)
+    {
+        ISlasher.Commitment memory commitment =
+            ISlasher.Commitment({ commitmentType: 0, payload: payload, slasher: slasher });
+
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(secretKey, keccak256(abi.encode(commitment)));
+        bytes memory signature = abi.encodePacked(r, s, v);
+        signedCommitment = ISlasher.SignedCommitment({ commitment: commitment, signature: signature });
+    }
+
     function signDelegation(uint256 secretKey, ISlasher.Delegation memory delegation, bytes memory domainSeparator)
         public
         view
@@ -232,8 +245,11 @@ contract UnitTestHelper is Test {
 
         result.signedDelegation = signDelegation(params.proposerSecretKey, delegation, params.domainSeparator);
 
+        ISlasher.SignedCommitment memory signedCommitment =
+            basicCommitment(params.commitmentSecretKey, params.slasher, "");
+
         // save info for later reentrancy
-        reentrantContract.saveResult(params, result);
+        reentrantContract.saveResult(params, result, signedCommitment);
     }
 }
 
@@ -252,19 +268,23 @@ contract ReentrantContract {
     IRegistry.Registration[1] registrations;
     uint16 unregistrationDelay;
 
+    ISlasher.SignedCommitment signedCommitment;
+
     constructor(address registryAddress) {
         registry = IRegistry(registryAddress);
     }
 
     function saveResult(
         UnitTestHelper.RegisterAndDelegateParams memory _params,
-        UnitTestHelper.RegisterAndDelegateResult memory _result
+        UnitTestHelper.RegisterAndDelegateResult memory _result,
+        ISlasher.SignedCommitment memory _signedCommitment
     ) public {
         params = _params;
         signedDelegation = _result.signedDelegation;
         for (uint256 i = 0; i < _result.registrations.length; i++) {
             registrations[i] = _result.registrations[i];
         }
+        signedCommitment = _signedCommitment;
     }
 
     function _hashToLeaves(IRegistry.Registration[] memory _registrations) internal pure returns (bytes32[] memory) {
@@ -395,7 +415,7 @@ contract ReentrantSlashCommitment is ReentrantContract {
         bytes memory evidence;
 
         try registry.slashCommitment(
-            registrationRoot, signedDelegation.signature, proof, leafIndex, signedDelegation, evidence
+            registrationRoot, signedDelegation.signature, proof, leafIndex, signedDelegation, signedCommitment, evidence
         ) {
             revert("should not be able to slash commitment again");
         } catch (bytes memory _reason) {

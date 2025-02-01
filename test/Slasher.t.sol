@@ -18,10 +18,12 @@ contract DummySlasher is ISlasher {
         return bytes("DUMMY-SLASHER-DOMAIN-SEPARATOR");
     }
 
-    function slash(ISlasher.Delegation calldata delegation, bytes calldata evidence, address challenger)
-        external
-        returns (uint256 slashAmountGwei, uint256 rewardAmountGwei)
-    {
+    function slash(
+        ISlasher.Delegation calldata delegation,
+        ISlasher.Commitment calldata commitment,
+        bytes calldata evidence,
+        address challenger
+    ) external returns (uint256 slashAmountGwei, uint256 rewardAmountGwei) {
         slashAmountGwei = SLASH_AMOUNT_GWEI;
         rewardAmountGwei = REWARD_AMOUNT_GWEI;
     }
@@ -54,10 +56,13 @@ contract DummySlasherTest is UnitTestHelper {
             slasher: address(dummySlasher),
             domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
             metadata: "",
-            slot: uint64(UINT256_MAX)
+            slot: 0
         });
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
+
+        ISlasher.SignedCommitment memory signedCommitment =
+            basicCommitment(params.commitmentSecretKey, params.slasher, "");
 
         // Setup proof
         bytes32[] memory leaves = _hashToLeaves(result.registrations);
@@ -86,6 +91,7 @@ contract DummySlasherTest is UnitTestHelper {
             proof,
             leafIndex,
             result.signedDelegation,
+            signedCommitment,
             evidence
         );
 
@@ -113,7 +119,9 @@ contract DummySlasherTest is UnitTestHelper {
         );
 
         // Verify the slashedBefore mapping is set
-        bytes32 slashingDigest = keccak256(abi.encode(result.signedDelegation, result.registrationRoot));
+        bytes32 slashingDigest =
+            keccak256(abi.encode(result.signedDelegation, signedCommitment, result.registrationRoot));
+
         assertEq(registry.slashedBefore(slashingDigest), true, "slashedBefore not set");
     }
 
@@ -133,6 +141,9 @@ contract DummySlasherTest is UnitTestHelper {
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
 
+        ISlasher.SignedCommitment memory signedCommitment =
+            basicCommitment(params.commitmentSecretKey, params.slasher, "");
+
         bytes32[] memory leaves = _hashToLeaves(result.registrations);
         uint256 leafIndex = 0;
         bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
@@ -146,6 +157,7 @@ contract DummySlasherTest is UnitTestHelper {
             proof,
             leafIndex,
             result.signedDelegation,
+            signedCommitment,
             evidence
         );
     }
@@ -165,6 +177,8 @@ contract DummySlasherTest is UnitTestHelper {
         });
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
+        ISlasher.SignedCommitment memory signedCommitment =
+            basicCommitment(params.commitmentSecretKey, params.slasher, "");
 
         // Create invalid proof
         bytes32[] memory invalidProof = new bytes32[](1);
@@ -174,7 +188,13 @@ contract DummySlasherTest is UnitTestHelper {
 
         vm.expectRevert(IRegistry.NotRegisteredKey.selector);
         registry.slashCommitment(
-            result.registrationRoot, result.registrations[0].signature, invalidProof, 0, result.signedDelegation, ""
+            result.registrationRoot,
+            result.registrations[0].signature,
+            invalidProof,
+            0,
+            result.signedDelegation,
+            signedCommitment,
+            ""
         );
     }
 
@@ -194,6 +214,9 @@ contract DummySlasherTest is UnitTestHelper {
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
 
+        ISlasher.SignedCommitment memory signedCommitment =
+            basicCommitment(params.commitmentSecretKey, params.slasher, "");
+
         // Sign delegation with different secret key
         ISlasher.SignedDelegation memory badSignedDelegation =
             signDelegation(SECRET_KEY_2, result.signedDelegation.delegation, params.domainSeparator);
@@ -211,6 +234,7 @@ contract DummySlasherTest is UnitTestHelper {
             proof,
             leafIndex,
             badSignedDelegation,
+            signedCommitment,
             ""
         );
     }
@@ -230,6 +254,8 @@ contract DummySlasherTest is UnitTestHelper {
         });
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
+        ISlasher.SignedCommitment memory signedCommitment =
+            basicCommitment(params.commitmentSecretKey, params.slasher, "");
 
         bytes32[] memory leaves = _hashToLeaves(result.registrations);
         uint256 leafIndex = 0;
@@ -245,6 +271,7 @@ contract DummySlasherTest is UnitTestHelper {
             proof,
             leafIndex,
             result.signedDelegation,
+            signedCommitment,
             ""
         );
     }
@@ -267,6 +294,8 @@ contract DummySlasherTest is UnitTestHelper {
         });
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
+        ISlasher.SignedCommitment memory signedCommitment =
+            basicCommitment(params.commitmentSecretKey, params.slasher, "");
 
         bytes32[] memory leaves = _hashToLeaves(result.registrations);
         uint256 leafIndex = 0;
@@ -281,6 +310,7 @@ contract DummySlasherTest is UnitTestHelper {
             proof,
             leafIndex,
             result.signedDelegation,
+            signedCommitment,
             ""
         );
     }
@@ -300,6 +330,8 @@ contract DummySlasherTest is UnitTestHelper {
         });
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
+        ISlasher.SignedCommitment memory signedCommitment =
+            basicCommitment(params.commitmentSecretKey, params.slasher, "");
 
         // Setup proof
         bytes32[] memory leaves = _hashToLeaves(result.registrations);
@@ -317,6 +349,7 @@ contract DummySlasherTest is UnitTestHelper {
             proof,
             leafIndex,
             result.signedDelegation,
+            signedCommitment,
             evidence
         );
 
@@ -341,20 +374,20 @@ contract DummySlasherTest is UnitTestHelper {
             proof,
             leafIndex,
             result.signedDelegation,
+            signedCommitment,
             evidence
         );
 
-        // attempt to slash with different SignedDelegation
-        result.signedDelegation.delegation.metadata = "different metadata";
-        ISlasher.SignedDelegation memory differentSignedDelegation =
-            signDelegation(SECRET_KEY_1, result.signedDelegation.delegation, dummySlasher.DOMAIN_SEPARATOR());
+        // attempt to slash with different SignedCommitment
+        signedCommitment = basicCommitment(params.commitmentSecretKey, params.slasher, "different payload");
         vm.expectRevert(IRegistry.SlashWindowExpired.selector);
         registry.slashCommitment(
             result.registrationRoot,
             result.registrations[leafIndex].signature,
             proof,
             leafIndex,
-            differentSignedDelegation,
+            result.signedDelegation,
+            signedCommitment,
             evidence
         );
 
@@ -393,6 +426,8 @@ contract DummySlasherTest is UnitTestHelper {
         });
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
+        ISlasher.SignedCommitment memory signedCommitment =
+            basicCommitment(params.commitmentSecretKey, params.slasher, "");
 
         // Setup proof
         bytes32[] memory leaves = _hashToLeaves(result.registrations);
@@ -417,13 +452,12 @@ contract DummySlasherTest is UnitTestHelper {
             proof,
             leafIndex,
             result.signedDelegation,
+            signedCommitment,
             evidence
         );
 
-        // slash again with different SignedDelegation
-        result.signedDelegation.delegation.metadata = "different metadata";
-        ISlasher.SignedDelegation memory differentSignedDelegation =
-            signDelegation(SECRET_KEY_1, result.signedDelegation.delegation, dummySlasher.DOMAIN_SEPARATOR());
+        // slash again with different SignedCommitment
+        signedCommitment = basicCommitment(params.commitmentSecretKey, params.slasher, "different payload");
         vm.expectEmit(address(registry));
         emit IRegistry.OperatorSlashed(
             result.registrationRoot,
@@ -436,7 +470,8 @@ contract DummySlasherTest is UnitTestHelper {
             result.registrations[leafIndex].signature,
             proof,
             leafIndex,
-            differentSignedDelegation,
+            result.signedDelegation,
+            signedCommitment,
             evidence
         );
 
@@ -469,6 +504,8 @@ contract DummySlasherTest is UnitTestHelper {
         });
 
         (RegisterAndDelegateResult memory result,) = registerAndDelegateReentrant(params);
+        ISlasher.SignedCommitment memory signedCommitment =
+            basicCommitment(params.commitmentSecretKey, params.slasher, "");
 
         // Setup proof
         bytes32[] memory leaves = _hashToLeaves(result.registrations);
@@ -492,7 +529,13 @@ contract DummySlasherTest is UnitTestHelper {
             result.signedDelegation.delegation.proposerPubKey
         );
         (uint256 gotSlashAmountGwei, uint256 gotRewardAmountGwei) = registry.slashCommitment(
-            result.registrationRoot, result.registrations[0].signature, proof, 0, result.signedDelegation, evidence
+            result.registrationRoot,
+            result.registrations[0].signature,
+            proof,
+            0,
+            result.signedDelegation,
+            signedCommitment,
+            evidence
         );
         assertEq(dummySlasher.SLASH_AMOUNT_GWEI(), gotSlashAmountGwei, "Slash amount incorrect");
         assertEq(dummySlasher.REWARD_AMOUNT_GWEI(), gotRewardAmountGwei, "Reward amount incorrect");

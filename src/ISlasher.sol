@@ -47,15 +47,19 @@ interface ISlasher {
     }
 
     /// @notice Slash a proposer's BLS key for a given delegation
-    /// @dev The URC will call this function to slash a registered operator if supplied with a valid delegation and evidence
+    /// @dev The URC will call this function to slash a registered operator if supplied with a valid commitment and evidence
     /// @param delegation The delegation message
+    /// @param commitment The commitment message
     /// @param evidence Arbitrary evidence for the slashing
     /// @param challenger The address of the challenger
     /// @return slashAmountGwei The amount of Gwei slashed
     /// @return rewardAmountGwei The amount of Gwei rewarded to the caller
-    function slash(Delegation calldata delegation, bytes calldata evidence, address challenger)
-        external
-        returns (uint256 slashAmountGwei, uint256 rewardAmountGwei);
+    function slash(
+        Delegation calldata delegation,
+        Commitment calldata commitment,
+        bytes calldata evidence,
+        address challenger
+    ) external returns (uint256 slashAmountGwei, uint256 rewardAmountGwei);
 
     /// @notice The domain separator for the Slasher contract
     /// @dev The domain separator is used to prevent replay attacks from different Slasher contracts

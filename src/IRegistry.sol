@@ -120,6 +120,8 @@ interface IRegistry {
     error SlashingAlreadyOccurred();
     error NotSlashed();
     error SlashWindowNotMet();
+    error UnauthorizedCommitment();
+
     /**
      *
      *                                *
@@ -127,7 +129,6 @@ interface IRegistry {
      *                                *
      *
      */
-
     function register(Registration[] calldata registrations, address withdrawalAddress, uint16 unregistrationDelay)
         external
         payable
@@ -156,7 +157,8 @@ interface IRegistry {
         BLS.G2Point calldata registrationSignature,
         bytes32[] calldata proof,
         uint256 leafIndex,
-        ISlasher.SignedDelegation calldata signedDelegation,
+        ISlasher.SignedDelegation calldata delegation,
+        ISlasher.SignedCommitment calldata commitment,
         bytes calldata evidence
     ) external returns (uint256 slashAmountGwei, uint256 rewardAmountGwei);
 }

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 pragma solidity >=0.8.0 <0.9.0;
 
+import { ECDSA } from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+
 import { BLS } from "./lib/BLS.sol";
 import { MerkleTree } from "./lib/MerkleTree.sol";
 import { IRegistry } from "./IRegistry.sol";
@@ -222,7 +224,8 @@ contract Registry is IRegistry {
     /// @param registrationSignature The signature from the operator's previously registered `Registration`
     /// @param proof The merkle proof to verify the operator's key is in the registry
     /// @param leafIndex The index of the leaf in the merkle tree
-    /// @param signedDelegation The SignedDelegation signed by the operator's BLS key
+    /// @param delegation The SignedDelegation signed by the operator's BLS key
+    /// @param commitment The SignedCommitment signed by the delegate's ECDSA key
     /// @param evidence Arbitrary evidence to slash the operator, required by the Slasher contract
     /// @return slashAmountGwei The amount of GWEI slashed
     /// @return rewardAmountGwei The amount of GWEI rewarded to the caller
@@ -231,12 +234,13 @@ contract Registry is IRegistry {
         BLS.G2Point calldata registrationSignature,
         bytes32[] calldata proof,
         uint256 leafIndex,
-        ISlasher.SignedDelegation calldata signedDelegation,
+        ISlasher.SignedDelegation calldata delegation,
+        ISlasher.SignedCommitment calldata commitment,
         bytes calldata evidence
     ) external returns (uint256 slashAmountGwei, uint256 rewardAmountGwei) {
         Operator storage operator = registrations[registrationRoot];
 
-        bytes32 slashingDigest = keccak256(abi.encode(signedDelegation, registrationRoot));
+        bytes32 slashingDigest = keccak256(abi.encode(delegation, commitment, registrationRoot));
 
         if (slashedBefore[slashingDigest]) {
             revert SlashingAlreadyOccurred();
@@ -258,9 +262,17 @@ contract Registry is IRegistry {
         }
 
         uint256 collateralGwei =
-            _verifyDelegation(registrationRoot, registrationSignature, proof, leafIndex, signedDelegation);
+            _verifyDelegation(registrationRoot, registrationSignature, proof, leafIndex, delegation);
 
-        (slashAmountGwei, rewardAmountGwei) = _executeSlash(signedDelegation, evidence, collateralGwei);
+        // Verify the commitment was signed by the commitment key from the Delegation
+        address commitmentsKey = ECDSA.recover(keccak256(abi.encode(commitment.commitment)), commitment.signature);
+
+        if (commitmentsKey != delegation.delegation.commitmentsKey) {
+            revert UnauthorizedCommitment();
+        }
+
+        (slashAmountGwei, rewardAmountGwei) =
+            _executeSlash(delegation.delegation, commitment.commitment, evidence, collateralGwei);
 
         // Reward challenger + burn Ether
         _executeSlashingTransfers(slashAmountGwei, rewardAmountGwei);
@@ -276,9 +288,7 @@ contract Registry is IRegistry {
         // Prevent same slashing from occurring again
         slashedBefore[slashingDigest] = true;
 
-        emit OperatorSlashed(
-            registrationRoot, slashAmountGwei, rewardAmountGwei, signedDelegation.delegation.proposerPubKey
-        );
+        emit OperatorSlashed(registrationRoot, slashAmountGwei, rewardAmountGwei, delegation.delegation.proposerPubKey);
     }
 
     /// @notice Adds collateral to an Operator struct
@@ -375,17 +385,17 @@ contract Registry is IRegistry {
     /// @param registrationSignature The signature from the operator's previously registered `Registration`
     /// @param proof The merkle proof to verify the operator's key is in the registry
     /// @param leafIndex The index of the leaf in the merkle tree
-    /// @param signedDelegation The SignedDelegation signed by the operator's BLS key
+    /// @param delegation The SignedDelegation signed by the operator's BLS key
     /// @return collateralGwei The collateral amount in GWEI
     function _verifyDelegation(
         bytes32 registrationRoot,
         BLS.G2Point calldata registrationSignature,
         bytes32[] calldata proof,
         uint256 leafIndex,
-        ISlasher.SignedDelegation calldata signedDelegation
+        ISlasher.SignedDelegation calldata delegation
     ) internal view returns (uint256 collateralGwei) {
         // Reconstruct leaf using pubkey in SignedDelegation to check equivalence
-        bytes32 leaf = keccak256(abi.encode(signedDelegation.delegation.proposerPubKey, registrationSignature));
+        bytes32 leaf = keccak256(abi.encode(delegation.delegation.proposerPubKey, registrationSignature));
 
         collateralGwei = _verifyMerkleProof(registrationRoot, leaf, proof, leafIndex);
 
@@ -394,31 +404,31 @@ contract Registry is IRegistry {
         }
 
         // Reconstruct Delegation message
-        bytes memory message = abi.encode(signedDelegation.delegation);
+        bytes memory message = abi.encode(delegation.delegation);
 
         // Recover Slasher contract domain separator
-        bytes memory domainSeparator = ISlasher(signedDelegation.delegation.slasher).DOMAIN_SEPARATOR();
+        bytes memory domainSeparator = ISlasher(delegation.delegation.slasher).DOMAIN_SEPARATOR();
 
-        if (
-            !BLS.verify(message, signedDelegation.signature, signedDelegation.delegation.proposerPubKey, domainSeparator)
-        ) {
+        if (!BLS.verify(message, delegation.signature, delegation.delegation.proposerPubKey, domainSeparator)) {
             revert DelegationSignatureInvalid();
         }
     }
 
     /// @notice Executes the slash function of the Slasher contract and returns the amount of GWEI to be slashed
     /// @dev The function will revert if the `slashAmountGwei` is 0, if the `slashAmountGwei` exceeds the operator's collateral, or if the Slasher.slash() function reverts.
-    /// @param signedDelegation The SignedDelegation signed by the operator's BLS key
+    /// @param delegation The SignedDelegation signed by the operator's BLS key
+    /// @param commitment The SignedCommitment signed by the delegate's ECDSA key
     /// @param evidence Arbitrary evidence to slash the operator, required by the Slasher contract
     /// @param collateralGwei The operator's collateral amount in GWEI
     /// @return slashAmountGwei The amount of GWEI to be slashed
     function _executeSlash(
-        ISlasher.SignedDelegation calldata signedDelegation,
+        ISlasher.Delegation calldata delegation,
+        ISlasher.Commitment calldata commitment,
         bytes calldata evidence,
         uint256 collateralGwei
     ) internal returns (uint256 slashAmountGwei, uint256 rewardAmountGwei) {
         (slashAmountGwei, rewardAmountGwei) =
-            ISlasher(signedDelegation.delegation.slasher).slash(signedDelegation.delegation, evidence, msg.sender);
+            ISlasher(commitment.slasher).slash(delegation, commitment, evidence, msg.sender);
 
         if (slashAmountGwei > collateralGwei) {
             revert SlashAmountExceedsCollateral();
