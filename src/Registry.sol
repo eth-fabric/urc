@@ -24,6 +24,7 @@ contract Registry is IRegistry {
     uint32 public constant SLASH_WINDOW = 7200; // 1 day
     address internal constant BURNER_ADDRESS = address(0x0000000000000000000000000000000000000000);
     bytes public constant DOMAIN_SEPARATOR = "0x00435255"; // "URC" in little endian
+    bytes public constant DELEGATION_DOMAIN_SEPARATOR = "0x0044656c"; // "Del" in little endian
     uint256 public ETH2_GENESIS_TIMESTAMP;
 
     constructor() {
@@ -265,9 +266,9 @@ contract Registry is IRegistry {
             _verifyDelegation(registrationRoot, registrationSignature, proof, leafIndex, delegation);
 
         // Verify the commitment was signed by the commitment key from the Delegation
-        address commitmentsKey = ECDSA.recover(keccak256(abi.encode(commitment.commitment)), commitment.signature);
+        address committer = ECDSA.recover(keccak256(abi.encode(commitment.commitment)), commitment.signature);
 
-        if (commitmentsKey != delegation.delegation.commitmentsKey) {
+        if (committer != delegation.delegation.committer) {
             revert UnauthorizedCommitment();
         }
 
@@ -288,7 +289,7 @@ contract Registry is IRegistry {
         // Prevent same slashing from occurring again
         slashedBefore[slashingDigest] = true;
 
-        emit OperatorSlashed(registrationRoot, slashAmountGwei, rewardAmountGwei, delegation.delegation.proposerPubKey);
+        emit OperatorSlashed(registrationRoot, slashAmountGwei, rewardAmountGwei, delegation.delegation.proposer);
     }
 
     /// @notice Slash an operator for equivocation (signing two different delegations for the same slot)
@@ -377,7 +378,7 @@ contract Registry is IRegistry {
             revert EthTransferFailed();
         }
 
-        emit OperatorEquivocated(registrationRoot, MIN_COLLATERAL, delegationOne.delegation.proposerPubKey);
+        emit OperatorEquivocated(registrationRoot, MIN_COLLATERAL, delegationOne.delegation.proposer);
     }
 
     /// @notice Adds collateral to an Operator struct
@@ -468,7 +469,7 @@ contract Registry is IRegistry {
 
     /// @notice Verifies a delegation was signed by a registered operator's key
     /// @dev The function will return the operator's collateral amount if the proof is valid or 0 if the proof is invalid.
-    /// @dev The `signedDelegation.signature` is expected to be the abi-encoded `Delegation` message mixed with the Slasher's `DOMAIN_SEPARATOR`.
+    /// @dev The `signedDelegation.signature` is expected to be the abi-encoded `Delegation` message mixed with the URC's `DELEGATION_DOMAIN_SEPARATOR`.
     /// @dev The function will revert if the delegation message expired, if the delegation signature is invalid, or if the delegation is not signed by the operator's BLS key.
     /// @param registrationRoot The merkle root generated and stored from the register() function
     /// @param registrationSignature The signature from the operator's previously registered `Registration`
@@ -484,7 +485,7 @@ contract Registry is IRegistry {
         ISlasher.SignedDelegation calldata delegation
     ) internal view returns (uint256 collateralGwei) {
         // Reconstruct leaf using pubkey in SignedDelegation to check equivalence
-        bytes32 leaf = keccak256(abi.encode(delegation.delegation.proposerPubKey, registrationSignature));
+        bytes32 leaf = keccak256(abi.encode(delegation.delegation.proposer, registrationSignature));
 
         collateralGwei = _verifyMerkleProof(registrationRoot, leaf, proof, leafIndex);
 
@@ -495,10 +496,7 @@ contract Registry is IRegistry {
         // Reconstruct Delegation message
         bytes memory message = abi.encode(delegation.delegation);
 
-        // Recover Slasher contract domain separator
-        bytes memory domainSeparator = ISlasher(delegation.delegation.slasher).DOMAIN_SEPARATOR();
-
-        if (!BLS.verify(message, delegation.signature, delegation.delegation.proposerPubKey, domainSeparator)) {
+        if (!BLS.verify(message, delegation.signature, delegation.delegation.proposer, DELEGATION_DOMAIN_SEPARATOR)) {
             revert DelegationSignatureInvalid();
         }
     }

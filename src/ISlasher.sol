@@ -7,13 +7,11 @@ interface ISlasher {
     /// @notice A Delegation message from a proposer's BLS key to a delegate's BLS and ECDSA key
     struct Delegation {
         /// The proposer's BLS public key
-        BLS.G1Point proposerPubKey;
+        BLS.G1Point proposer;
         /// The delegate's BLS public key for Constraints API
-        BLS.G1Point constraintsKey;
+        BLS.G1Point delegate;
         /// The address of the delegate's ECDSA key for signing commitments
-        address commitmentsKey;
-        /// The address of the slasher contract
-        address slasher;
+        address committer;
         /// The slot number the delegation is valid for
         uint64 slot;
         /// Arbitrary metadata reserved for future use

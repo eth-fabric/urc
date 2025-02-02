@@ -105,7 +105,7 @@ contract InclusionPreconfSlasher is ISlasher, PreconfStructs {
         TransactionCommitment memory txCommitment = abi.decode(commitment.commitment.payload, (TransactionCommitment));
 
         // If the inclusion proof is valid (doesn't revert) it means the challenge is fraudulent
-        _verifyInclusionProof(txCommitment, proof, delegation.commitmentsKey);
+        _verifyInclusionProof(txCommitment, proof, delegation.committer);
 
         // Delete the challenge
         delete challenges[challengeID];

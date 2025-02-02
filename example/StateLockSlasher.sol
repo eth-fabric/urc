@@ -73,7 +73,7 @@ contract StateLockSlasher is ISlasher, PreconfStructs {
         }
 
         // If the inclusion proof is valid (doesn't revert) they should be slashed for not excluding the transaction
-        _verifyInclusionProof(txCommitment, proof, delegation.commitmentsKey);
+        _verifyInclusionProof(txCommitment, proof, delegation.committer);
 
         // Return the slash amount to the URC slasher
         slashAmountGwei = SLASH_AMOUNT_GWEI;

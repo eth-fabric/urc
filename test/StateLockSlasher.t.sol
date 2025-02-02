@@ -34,16 +34,16 @@ contract StateLockSlasherTest is UnitTestHelper, PreconfStructs {
     uint256 slashAmountGwei = 1 ether / 1 gwei; // slash 1 ether
     uint256 rewardAmountGwei = 0.1 ether / 1 gwei; // reward 0.1 ether
     uint256 collateral = 1.1 ether;
-    uint256 commitmentSecretKey;
-    address commitmentKey;
+    uint256 committerSecretKey;
+    address committer;
 
     function setUp() public {
         vm.createSelectFork(vm.rpcUrl("mainnet"));
         slasher = new StateLockSlasher(slashAmountGwei, rewardAmountGwei);
         registry = new Registry();
-        (commitmentKey, commitmentSecretKey) = makeAddrAndKey("commitmentsKey");
+        (committer, committerSecretKey) = makeAddrAndKey("commitmentsKey");
         delegatePubKey = BLS.toPublicKey(SECRET_KEY_2);
-        vm.deal(commitmentKey, 100 ether);
+        vm.deal(committer, 100 ether);
     }
 
     function testProveTransactionInclusion() public {
@@ -117,8 +117,8 @@ contract StateLockSlasherTest is UnitTestHelper, PreconfStructs {
             collateral: collateral,
             withdrawalAddress: operator,
             delegateSecretKey: SECRET_KEY_2,
-            commitmentSecretKey: commitmentSecretKey,
-            commitmentKey: commitmentKey,
+            committerSecretKey: committerSecretKey,
+            committer: committer,
             slasher: address(slasher),
             domainSeparator: slasher.DOMAIN_SEPARATOR(),
             metadata: metadata,
@@ -159,7 +159,7 @@ contract StateLockSlasherTest is UnitTestHelper, PreconfStructs {
         // Register and delegate
         // Delegate signs a commitment to exclude a TX
         TransactionCommitment memory commitment =
-            _createStateLockCommitment(exclusionBlockNumber, id, commitmentKey, commitmentSecretKey);
+            _createStateLockCommitment(exclusionBlockNumber, id, committer, committerSecretKey);
 
         // Build the inclusion proof to prove failure to exclude
         string memory rawPreviousHeader = vm.readFile("./test/testdata/header_20785011.json");
@@ -186,7 +186,7 @@ contract StateLockSlasherTest is UnitTestHelper, PreconfStructs {
         bytes32 inclusionTxRoot = slasher._decodeBlockHeaderRLP(inclusionProof.inclusionBlockHeaderRLP).txRoot;
         assertEq(inclusionTxRoot, vm.parseJsonBytes32(txProof, ".root"));
 
-        signedCommitment = basicCommitment(commitmentSecretKey, address(slasher), abi.encode(commitment));
+        signedCommitment = basicCommitment(committerSecretKey, address(slasher), abi.encode(commitment));
 
         evidence = abi.encode(inclusionProof);
     }

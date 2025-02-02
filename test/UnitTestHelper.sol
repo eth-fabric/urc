@@ -183,8 +183,8 @@ contract UnitTestHelper is Test {
         uint256 collateral;
         address withdrawalAddress;
         uint256 delegateSecretKey;
-        uint256 commitmentSecretKey;
-        address commitmentKey;
+        uint256 committerSecretKey;
+        address committer;
         address slasher;
         bytes domainSeparator;
         bytes metadata;
@@ -207,10 +207,9 @@ contract UnitTestHelper is Test {
 
         // Sign delegation
         ISlasher.Delegation memory delegation = ISlasher.Delegation({
-            proposerPubKey: BLS.toPublicKey(params.proposerSecretKey),
-            constraintsKey: BLS.toPublicKey(params.delegateSecretKey),
-            commitmentsKey: params.commitmentKey,
-            slasher: params.slasher,
+            proposer: BLS.toPublicKey(params.proposerSecretKey),
+            delegate: BLS.toPublicKey(params.delegateSecretKey),
+            committer: params.committer,
             slot: params.slot,
             metadata: params.metadata
         });
@@ -235,10 +234,9 @@ contract UnitTestHelper is Test {
 
         // Sign delegation
         ISlasher.Delegation memory delegation = ISlasher.Delegation({
-            proposerPubKey: BLS.toPublicKey(params.proposerSecretKey),
-            constraintsKey: BLS.toPublicKey(params.delegateSecretKey),
-            commitmentsKey: params.commitmentKey,
-            slasher: params.slasher,
+            proposer: BLS.toPublicKey(params.proposerSecretKey),
+            delegate: BLS.toPublicKey(params.delegateSecretKey),
+            committer: params.committer,
             slot: params.slot,
             metadata: params.metadata
         });
@@ -246,7 +244,7 @@ contract UnitTestHelper is Test {
         result.signedDelegation = signDelegation(params.proposerSecretKey, delegation, params.domainSeparator);
 
         ISlasher.SignedCommitment memory signedCommitment =
-            basicCommitment(params.commitmentSecretKey, params.slasher, "");
+            basicCommitment(params.committerSecretKey, params.slasher, "");
 
         // save info for later reentrancy
         reentrantContract.saveResult(params, result, signedCommitment);

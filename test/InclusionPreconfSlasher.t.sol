@@ -34,18 +34,18 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
     uint256 slashAmountGwei = 1 ether / 1 gwei; // slash 1 ether
     uint256 rewardAmountGwei = 0.1 ether / 1 gwei; // reward 0.1 ether
     uint256 collateral = 1.1 ether;
-    uint256 commitmentSecretKey;
-    address commitmentKey;
+    uint256 committerSecretKey;
+    address committer;
 
     function setUp() public {
         vm.createSelectFork(vm.rpcUrl("mainnet"));
         registry = new Registry();
         slasher = new InclusionPreconfSlasher(slashAmountGwei, rewardAmountGwei, address(registry));
         delegatePubKey = BLS.toPublicKey(SECRET_KEY_2);
-        (commitmentKey, commitmentSecretKey) = makeAddrAndKey("commitmentsKey");
+        (committer, committerSecretKey) = makeAddrAndKey("commitmentsKey");
         vm.deal(challenger, 100 ether);
         vm.deal(operator, 100 ether);
-        vm.deal(commitmentKey, 100 ether);
+        vm.deal(committer, 100 ether);
     }
 
     function setupRegistration(address operator, address delegate, uint64 slot)
@@ -61,8 +61,8 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
             collateral: collateral,
             withdrawalAddress: operator,
             delegateSecretKey: SECRET_KEY_2,
-            commitmentSecretKey: commitmentSecretKey,
-            commitmentKey: commitmentKey,
+            committerSecretKey: committerSecretKey,
+            committer: committer,
             slasher: address(slasher),
             domainSeparator: slasher.DOMAIN_SEPARATOR(),
             metadata: metadata,
@@ -99,8 +99,8 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
 
         // Delegate signs a commitment to include a TX
         TransactionCommitment memory txCommitment =
-            _createInclusionCommitment(inclusionBlockNumber, id, commitmentKey, commitmentSecretKey);
-        signedCommitment = basicCommitment(commitmentSecretKey, address(slasher), abi.encode(txCommitment));
+            _createInclusionCommitment(inclusionBlockNumber, id, committer, committerSecretKey);
+        signedCommitment = basicCommitment(committerSecretKey, address(slasher), abi.encode(txCommitment));
 
         // Build the inclusion proof to prove failure to exclude
         string memory rawPreviousHeader = vm.readFile("./test/testdata/header_20785011.json");
@@ -186,8 +186,8 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
             collateral: collateral,
             withdrawalAddress: alice,
             delegateSecretKey: SECRET_KEY_2,
-            commitmentSecretKey: commitmentSecretKey,
-            commitmentKey: commitmentKey,
+            committerSecretKey: committerSecretKey,
+            committer: committer,
             slasher: address(slasher),
             domainSeparator: slasher.DOMAIN_SEPARATOR(),
             metadata: metadata,
@@ -202,7 +202,7 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
             _createInclusionCommitment(inclusionBlockNumber, 1, delegate, delegatePK);
 
         ISlasher.SignedCommitment memory signedCommitment =
-            basicCommitment(commitmentSecretKey, address(slasher), abi.encode(commitment));
+            basicCommitment(committerSecretKey, address(slasher), abi.encode(commitment));
 
         // Try to create challenge with expired delegation
         uint256 bond = slasher.CHALLENGE_BOND();
