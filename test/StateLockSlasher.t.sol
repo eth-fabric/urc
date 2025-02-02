@@ -120,7 +120,6 @@ contract StateLockSlasherTest is UnitTestHelper, PreconfStructs {
             committerSecretKey: committerSecretKey,
             committer: committer,
             slasher: address(slasher),
-            domainSeparator: slasher.DOMAIN_SEPARATOR(),
             metadata: metadata,
             slot: slot
         });
@@ -141,9 +140,6 @@ contract StateLockSlasherTest is UnitTestHelper, PreconfStructs {
         // Create new keypair and fund wallet
         (address alice, uint256 alicePK) = makeAddrAndKey(string.concat("alice_", vm.toString(id)));
         vm.deal(alice, 100 ether); // Give alice some ETH
-
-        // Create ecdsa keypair for delegate
-        (address delegate, uint256 delegatePK) = makeAddrAndKey("delegate");
 
         // Advance before the fraud proof window
         vm.roll(exclusionBlockNumber - registry.FRAUD_PROOF_WINDOW());
@@ -206,7 +202,6 @@ contract StateLockSlasherTest is UnitTestHelper, PreconfStructs {
 
         // Save for comparison after slashing
         uint256 challengerBalanceBefore = challenger.balance;
-        uint256 operatorBalanceBefore = operator.balance;
         uint256 urcBalanceBefore = address(registry).balance;
 
         // Slash via URC

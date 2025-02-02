@@ -51,7 +51,7 @@ contract UnitTestHelper is Test {
         uint32 expectedUnregisteredAt,
         uint16 expectedUnregistrationDelay,
         uint32 expectedSlashedAt
-    ) internal {
+    ) internal view {
         IRegistry.Operator memory operatorData = getRegistrationData(registrationRoot);
         assertEq(operatorData.withdrawalAddress, expectedWithdrawalAddress, "Wrong withdrawal address");
         assertEq(operatorData.collateralGwei, expectedCollateral, "Wrong collateral amount");
@@ -94,7 +94,7 @@ contract UnitTestHelper is Test {
         uint256 _challengerBalanceBefore,
         uint256 _operatorBalanceBefore,
         uint256 _urcBalanceBefore
-    ) internal {
+    ) internal view {
         assertEq(_challenger.balance, _challengerBalanceBefore + _rewardAmount, "challenger didn't receive reward");
         assertEq(
             _operator.balance,
@@ -110,7 +110,7 @@ contract UnitTestHelper is Test {
         uint256 _rewardAmount,
         uint256 _challengerBalanceBefore,
         uint256 _urcBalanceBefore
-    ) internal {
+    ) internal view {
         assertEq(_challenger.balance, _challengerBalanceBefore + _rewardAmount, "challenger didn't receive reward");
         assertEq(address(registry).balance, _urcBalanceBefore - _slashedAmount - _rewardAmount, "urc balance incorrect");
     }
@@ -158,7 +158,7 @@ contract UnitTestHelper is Test {
 
     function basicCommitment(uint256 secretKey, address slasher, bytes memory payload)
         public
-        view
+        pure
         returns (ISlasher.SignedCommitment memory signedCommitment)
     {
         ISlasher.Commitment memory commitment =
@@ -169,12 +169,13 @@ contract UnitTestHelper is Test {
         signedCommitment = ISlasher.SignedCommitment({ commitment: commitment, signature: signature });
     }
 
-    function signDelegation(uint256 secretKey, ISlasher.Delegation memory delegation, bytes memory domainSeparator)
+    function signDelegation(uint256 secretKey, ISlasher.Delegation memory delegation)
         public
         view
         returns (ISlasher.SignedDelegation memory)
     {
-        BLS.G2Point memory signature = BLS.sign(abi.encode(delegation), secretKey, domainSeparator);
+        BLS.G2Point memory signature =
+            BLS.sign(abi.encode(delegation), secretKey, registry.DELEGATION_DOMAIN_SEPARATOR());
         return ISlasher.SignedDelegation({ delegation: delegation, signature: signature });
     }
 
@@ -186,7 +187,6 @@ contract UnitTestHelper is Test {
         uint256 committerSecretKey;
         address committer;
         address slasher;
-        bytes domainSeparator;
         bytes metadata;
         uint64 slot;
     }
@@ -214,7 +214,7 @@ contract UnitTestHelper is Test {
             metadata: params.metadata
         });
 
-        result.signedDelegation = signDelegation(params.proposerSecretKey, delegation, params.domainSeparator);
+        result.signedDelegation = signDelegation(params.proposerSecretKey, delegation);
     }
 
     function registerAndDelegateReentrant(RegisterAndDelegateParams memory params)
@@ -241,7 +241,7 @@ contract UnitTestHelper is Test {
             metadata: params.metadata
         });
 
-        result.signedDelegation = signDelegation(params.proposerSecretKey, delegation, params.domainSeparator);
+        result.signedDelegation = signDelegation(params.proposerSecretKey, delegation);
 
         ISlasher.SignedCommitment memory signedCommitment =
             basicCommitment(params.committerSecretKey, params.slasher, "");
@@ -407,7 +407,6 @@ contract ReentrantSlashCommitment is ReentrantContract {
         // Setup proof
         IRegistry.Registration[] memory _registrations = new IRegistry.Registration[](1);
         _registrations[0] = registrations[0];
-        bytes32[] memory leaves = _hashToLeaves(_registrations);
         uint256 leafIndex = 0;
         bytes32[] memory proof; // empty for single leaf
         bytes memory evidence;

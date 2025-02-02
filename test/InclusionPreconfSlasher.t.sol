@@ -64,7 +64,6 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
             committerSecretKey: committerSecretKey,
             committer: committer,
             slasher: address(slasher),
-            domainSeparator: slasher.DOMAIN_SEPARATOR(),
             metadata: metadata,
             slot: slot
         });
@@ -83,8 +82,6 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
         )
     {
         uint256 inclusionBlockNumber = 20_785_012;
-        // Create ecdsa keypair for delegate
-        (address delegate, uint256 delegatePK) = makeAddrAndKey("delegate");
 
         // Advance before the fraud proof window
         vm.roll(inclusionBlockNumber - registry.FRAUD_PROOF_WINDOW());
@@ -189,7 +186,6 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
             committerSecretKey: committerSecretKey,
             committer: committer,
             slasher: address(slasher),
-            domainSeparator: slasher.DOMAIN_SEPARATOR(),
             metadata: metadata,
             slot: 0 // already expired
          });

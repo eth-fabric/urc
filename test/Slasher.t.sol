@@ -14,10 +14,6 @@ contract DummySlasher is ISlasher {
     uint256 public SLASH_AMOUNT_GWEI = 1 ether / 1 gwei;
     uint256 public REWARD_AMOUNT_GWEI = 0.1 ether / 1 gwei; // MIN_COLLATERAL
 
-    function DOMAIN_SEPARATOR() external view returns (bytes memory) {
-        return bytes("DUMMY-SLASHER-DOMAIN-SEPARATOR");
-    }
-
     function slash(
         ISlasher.Delegation calldata delegation,
         ISlasher.Commitment calldata commitment,
@@ -54,7 +50,6 @@ contract DummySlasherTest is UnitTestHelper {
             committerSecretKey: committerSecretKey,
             committer: committer,
             slasher: address(dummySlasher),
-            domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
             metadata: "",
             slot: 0
         });
@@ -134,7 +129,6 @@ contract DummySlasherTest is UnitTestHelper {
             committerSecretKey: committerSecretKey,
             committer: committer,
             slasher: address(dummySlasher),
-            domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
             metadata: "",
             slot: uint64(UINT256_MAX)
         });
@@ -171,7 +165,6 @@ contract DummySlasherTest is UnitTestHelper {
             committerSecretKey: committerSecretKey,
             committer: committer,
             slasher: address(dummySlasher),
-            domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
             metadata: "",
             slot: uint64(UINT256_MAX)
         });
@@ -207,7 +200,6 @@ contract DummySlasherTest is UnitTestHelper {
             committerSecretKey: committerSecretKey,
             committer: committer,
             slasher: address(dummySlasher),
-            domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
             metadata: "",
             slot: uint64(UINT256_MAX)
         });
@@ -219,7 +211,7 @@ contract DummySlasherTest is UnitTestHelper {
 
         // Sign delegation with different secret key
         ISlasher.SignedDelegation memory badSignedDelegation =
-            signDelegation(SECRET_KEY_2, result.signedDelegation.delegation, params.domainSeparator);
+            signDelegation(SECRET_KEY_2, result.signedDelegation.delegation);
 
         bytes32[] memory leaves = _hashToLeaves(result.registrations);
         uint256 leafIndex = 0;
@@ -248,7 +240,6 @@ contract DummySlasherTest is UnitTestHelper {
             committerSecretKey: committerSecretKey,
             committer: committer,
             slasher: address(dummySlasher),
-            domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
             metadata: "",
             slot: uint64(UINT256_MAX)
         });
@@ -288,7 +279,6 @@ contract DummySlasherTest is UnitTestHelper {
             committerSecretKey: committerSecretKey,
             committer: committer,
             slasher: address(dummySlasher),
-            domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
             metadata: "",
             slot: uint64(UINT256_MAX)
         });
@@ -324,7 +314,6 @@ contract DummySlasherTest is UnitTestHelper {
             committerSecretKey: committerSecretKey,
             committer: committer,
             slasher: address(dummySlasher),
-            domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
             metadata: "",
             slot: uint64(UINT256_MAX)
         });
@@ -420,7 +409,6 @@ contract DummySlasherTest is UnitTestHelper {
             committerSecretKey: committerSecretKey,
             committer: committer,
             slasher: address(dummySlasher),
-            domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
             metadata: "",
             slot: uint64(UINT256_MAX)
         });
@@ -494,7 +482,6 @@ contract DummySlasherTest is UnitTestHelper {
             committerSecretKey: committerSecretKey,
             committer: committer,
             slasher: address(dummySlasher),
-            domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
             metadata: "",
             slot: uint64(UINT256_MAX)
         });
@@ -518,8 +505,7 @@ contract DummySlasherTest is UnitTestHelper {
             metadata: "different metadata"
         });
 
-        ISlasher.SignedDelegation memory signedDelegationTwo =
-            signDelegation(params.proposerSecretKey, delegationTwo, params.domainSeparator);
+        ISlasher.SignedDelegation memory signedDelegationTwo = signDelegation(params.proposerSecretKey, delegationTwo);
 
         // submit both delegations
         uint256 challengerBalanceBefore = challenger.balance;
@@ -556,7 +542,6 @@ contract DummySlasherTest is UnitTestHelper {
             committerSecretKey: committerSecretKey,
             committer: committer,
             slasher: address(dummySlasher),
-            domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
             metadata: "",
             slot: uint64(UINT256_MAX)
         });
@@ -575,8 +560,7 @@ contract DummySlasherTest is UnitTestHelper {
             metadata: "different metadata"
         });
 
-        ISlasher.SignedDelegation memory signedDelegationTwo =
-            signDelegation(params.proposerSecretKey, delegationTwo, params.domainSeparator);
+        ISlasher.SignedDelegation memory signedDelegationTwo = signDelegation(params.proposerSecretKey, delegationTwo);
 
         vm.startPrank(challenger);
         vm.expectRevert(IRegistry.FraudProofWindowNotMet.selector);
@@ -599,7 +583,6 @@ contract DummySlasherTest is UnitTestHelper {
             committerSecretKey: committerSecretKey,
             committer: committer,
             slasher: address(dummySlasher),
-            domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
             metadata: "",
             slot: uint64(UINT256_MAX)
         });
@@ -619,8 +602,7 @@ contract DummySlasherTest is UnitTestHelper {
             metadata: "different metadata"
         });
 
-        ISlasher.SignedDelegation memory signedDelegationTwo =
-            signDelegation(params.proposerSecretKey, delegationTwo, params.domainSeparator);
+        ISlasher.SignedDelegation memory signedDelegationTwo = signDelegation(params.proposerSecretKey, delegationTwo);
 
         vm.roll(block.timestamp + registry.FRAUD_PROOF_WINDOW() + 1);
 
@@ -645,7 +627,6 @@ contract DummySlasherTest is UnitTestHelper {
             committerSecretKey: committerSecretKey,
             committer: committer,
             slasher: address(dummySlasher),
-            domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
             metadata: "",
             slot: uint64(UINT256_MAX)
         });
@@ -678,7 +659,6 @@ contract DummySlasherTest is UnitTestHelper {
             committerSecretKey: committerSecretKey,
             committer: committer,
             slasher: address(dummySlasher),
-            domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
             metadata: "",
             slot: 1000
         });
@@ -697,8 +677,7 @@ contract DummySlasherTest is UnitTestHelper {
             metadata: "different metadata"
         });
 
-        ISlasher.SignedDelegation memory signedDelegationTwo =
-            signDelegation(params.proposerSecretKey, delegationTwo, params.domainSeparator);
+        ISlasher.SignedDelegation memory signedDelegationTwo = signDelegation(params.proposerSecretKey, delegationTwo);
 
         vm.roll(block.timestamp + registry.FRAUD_PROOF_WINDOW() + 1);
 
@@ -723,7 +702,6 @@ contract DummySlasherTest is UnitTestHelper {
             committerSecretKey: committerSecretKey,
             committer: committer,
             slasher: address(dummySlasher),
-            domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
             metadata: "",
             slot: uint64(UINT256_MAX)
         });
@@ -742,8 +720,7 @@ contract DummySlasherTest is UnitTestHelper {
             metadata: "different metadata"
         });
 
-        ISlasher.SignedDelegation memory signedDelegationTwo =
-            signDelegation(params.proposerSecretKey, delegationTwo, params.domainSeparator);
+        ISlasher.SignedDelegation memory signedDelegationTwo = signDelegation(params.proposerSecretKey, delegationTwo);
 
         vm.roll(block.timestamp + registry.FRAUD_PROOF_WINDOW() + 1);
 
@@ -790,7 +767,6 @@ contract DummySlasherTest is UnitTestHelper {
             committerSecretKey: committerSecretKey,
             committer: committer,
             slasher: address(dummySlasher),
-            domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
             metadata: "",
             slot: uint64(UINT256_MAX)
         });
@@ -809,8 +785,7 @@ contract DummySlasherTest is UnitTestHelper {
             metadata: "different metadata"
         });
 
-        ISlasher.SignedDelegation memory signedDelegationTwo =
-            signDelegation(params.proposerSecretKey, delegationTwo, params.domainSeparator);
+        ISlasher.SignedDelegation memory signedDelegationTwo = signDelegation(params.proposerSecretKey, delegationTwo);
 
         // move past the fraud proof window
         vm.roll(block.number + registry.FRAUD_PROOF_WINDOW() + 1);
@@ -847,7 +822,6 @@ contract DummySlasherTest is UnitTestHelper {
             committerSecretKey: committerSecretKey,
             committer: committer,
             slasher: address(dummySlasher),
-            domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
             metadata: "",
             slot: uint64(UINT256_MAX)
         });

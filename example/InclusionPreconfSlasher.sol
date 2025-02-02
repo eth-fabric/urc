@@ -135,9 +135,6 @@ contract InclusionPreconfSlasher is ISlasher, PreconfStructs {
         // recover the challenge ID from the commitment
         bytes32 challengeID = keccak256(abi.encode(commitment, delegation));
 
-        // decode the opaque commitment payload
-        TransactionCommitment memory txCommitment = abi.decode(commitment.payload, (TransactionCommitment));
-
         // It is assumed that this is function is called from the URC.slashCommitment() function. This check ensures that only the msg.sender that originates the chain of calls is able to slash the operator and ultimately claim the reward
         if (challenges[challengeID].challenger != challenger) {
             revert WrongChallengerAddress();
@@ -162,15 +159,11 @@ contract InclusionPreconfSlasher is ISlasher, PreconfStructs {
         rewardAmountGwei = REWARD_AMOUNT_GWEI;
     }
 
-    function DOMAIN_SEPARATOR() external view returns (bytes memory) {
-        return "0xeeeeeeee";
-    }
-
     function _verifyInclusionProof(
         TransactionCommitment memory commitment,
         InclusionProof memory proof,
         address commitmentSigner
-    ) internal {
+    ) internal view {
         uint256 targetSlot = commitment.slot;
         if (targetSlot > _getCurrentSlot() - JUSTIFICATION_DELAY) {
             // We cannot open challenges for slots that are not finalized by Ethereum consensus yet.

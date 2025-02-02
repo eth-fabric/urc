@@ -58,9 +58,4 @@ interface ISlasher {
         bytes calldata evidence,
         address challenger
     ) external returns (uint256 slashAmountGwei, uint256 rewardAmountGwei);
-
-    /// @notice The domain separator for the Slasher contract
-    /// @dev The domain separator is used to prevent replay attacks from different Slasher contracts
-    /// @return domainSeparator The domain separator
-    function DOMAIN_SEPARATOR() external view returns (bytes memory);
 }

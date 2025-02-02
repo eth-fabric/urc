@@ -80,15 +80,11 @@ contract StateLockSlasher is ISlasher, PreconfStructs {
         rewardAmountGwei = REWARD_AMOUNT_GWEI;
     }
 
-    function DOMAIN_SEPARATOR() external view returns (bytes memory) {
-        return "0xeeeeeeee";
-    }
-
     function _verifyInclusionProof(
         TransactionCommitment memory commitment,
         InclusionProof memory proof,
         address commitmentsKey
-    ) internal {
+    ) internal view {
         uint256 targetSlot = commitment.slot;
         if (targetSlot > _getCurrentSlot() - JUSTIFICATION_DELAY) {
             // We cannot open challenges for slots that are not finalized by Ethereum consensus yet.
