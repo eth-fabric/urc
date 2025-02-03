@@ -17,6 +17,9 @@ contract Registry is IRegistry {
     /// @notice Mapping to track if a slashing has occurred before with same input
     mapping(bytes32 slashingDigest => bool) public slashedBefore;
 
+    /// @notice Mapping to track opt-in and opt-out status for proposer commitment protocols
+    mapping(bytes32 => SlasherCommitment) public slasherCommitments;
+
     // Constants
     uint256 public constant MIN_COLLATERAL = 0.1 ether;
     uint256 public constant MIN_UNREGISTRATION_DELAY = 64; // Two epochs
@@ -45,10 +48,10 @@ contract Registry is IRegistry {
     /// @dev The function will merkleize the supplied `regs` and map the registration root to an Operator struct.
     /// @dev The function will revert if the operator has already registered the same `regs`, if they sent less than `MIN_COLLATERAL`, if the unregistration delay is less than `MIN_UNREGISTRATION_DELAY`, or if the registration root is invalid.
     /// @param regs The BLS keys to register
-    /// @param withdrawalAddress The authorized address to deregister from the registry and claim collateral
+    /// @param owner The authorized address to perform actions on behalf of the operator
     /// @param unregistrationDelay The number of blocks before the operator can be unregistered
     /// @return registrationRoot The merkle root of the registration
-    function register(Registration[] calldata regs, address withdrawalAddress, uint16 unregistrationDelay)
+    function register(Registration[] calldata regs, address owner, uint16 unregistrationDelay)
         external
         payable
         returns (bytes32 registrationRoot)
@@ -72,7 +75,7 @@ contract Registry is IRegistry {
         }
 
         registrations[registrationRoot] = Operator({
-            withdrawalAddress: withdrawalAddress,
+            owner: owner,
             collateralGwei: uint56(msg.value / 1 gwei),
             registeredAt: uint32(block.number),
             unregistrationDelay: unregistrationDelay,
@@ -114,7 +117,7 @@ contract Registry is IRegistry {
         uint256 leafIndex
     ) external returns (uint256 slashedCollateralWei) {
         Operator storage operator = registrations[registrationRoot];
-        address operatorWithdrawalAddress = operator.withdrawalAddress;
+        address operatorOwner = operator.owner;
 
         if (block.number > operator.registeredAt + FRAUD_PROOF_WINDOW) {
             revert FraudProofWindowExpired();
@@ -127,7 +130,7 @@ contract Registry is IRegistry {
         }
 
         // Reconstruct registration message
-        bytes memory message = abi.encodePacked(operatorWithdrawalAddress, operator.unregistrationDelay);
+        bytes memory message = abi.encodePacked(operatorOwner, operator.unregistrationDelay);
 
         // Verify registration signature
         if (BLS.verify(message, reg.signature, reg.pubkey, DOMAIN_SEPARATOR)) {
@@ -147,12 +150,12 @@ contract Registry is IRegistry {
         }
 
         // Return any remaining funds to Operator
-        (success,) = operatorWithdrawalAddress.call{ value: remainingWei }("");
+        (success,) = operatorOwner.call{ value: remainingWei }("");
         if (!success) {
             revert EthTransferFailed();
         }
 
-        emit RegistrationSlashed(registrationRoot, msg.sender, operatorWithdrawalAddress, reg);
+        emit RegistrationSlashed(registrationRoot, msg.sender, operatorOwner, reg);
 
         return MIN_COLLATERAL;
     }
@@ -164,7 +167,7 @@ contract Registry is IRegistry {
     function unregister(bytes32 registrationRoot) external {
         Operator storage operator = registrations[registrationRoot];
 
-        if (operator.withdrawalAddress != msg.sender) {
+        if (operator.owner != msg.sender) {
             revert WrongOperator();
         }
 
@@ -185,7 +188,7 @@ contract Registry is IRegistry {
     /// @param registrationRoot The merkle root generated and stored from the register() function
     function claimCollateral(bytes32 registrationRoot) external {
         Operator storage operator = registrations[registrationRoot];
-        address operatorWithdrawalAddress = operator.withdrawalAddress;
+        address operatorOwner = operator.owner;
         uint256 collateralGwei = operator.collateralGwei;
 
         // Check that they've unregistered
@@ -209,7 +212,7 @@ contract Registry is IRegistry {
         delete registrations[registrationRoot];
 
         // Transfer to operator
-        (bool success,) = operatorWithdrawalAddress.call{ value: amountToReturn }("");
+        (bool success,) = operatorOwner.call{ value: amountToReturn }("");
         if (!success) {
             revert EthTransferFailed();
         }
@@ -400,7 +403,7 @@ contract Registry is IRegistry {
 
     function claimSlashedCollateral(bytes32 registrationRoot) external {
         Operator storage operator = registrations[registrationRoot];
-        address operatorWithdrawalAddress = operator.withdrawalAddress;
+        address operatorOwner = operator.owner;
         uint256 collateralGwei = operator.collateralGwei;
 
         // Check that they've been slashed
@@ -419,7 +422,7 @@ contract Registry is IRegistry {
         delete registrations[registrationRoot];
 
         // Transfer to operator
-        (bool success,) = operatorWithdrawalAddress.call{ value: amountToReturn }("");
+        (bool success,) = operatorOwner.call{ value: amountToReturn }("");
         if (!success) {
             revert EthTransferFailed();
         }

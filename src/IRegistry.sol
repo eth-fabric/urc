@@ -23,8 +23,8 @@ interface IRegistry {
 
     /// @notice An operator of BLS key[s]
     struct Operator {
-        /// The address used to deregister from the registry and claim collateral
-        address withdrawalAddress;
+        /// The authorized addresss for the operator
+        address owner;
         /// ETH collateral in GWEI
         uint56 collateralGwei;
         /// The block number when registration occurred
@@ -35,6 +35,16 @@ interface IRegistry {
         uint16 unregistrationDelay;
         /// The block number when slashed from breaking a commitment
         uint32 slashedAt;
+    }
+
+    /// @notice A struct to track opt-in and opt-out status for proposer commitment protocols
+    struct SlasherCommitment {
+        /// The block number when the operator opted in
+        uint64 optedInAt;
+        /// The block number when the operator opted out
+        uint64 optedOutAt;
+        /// The address of the key used for commitments
+        address committer;
     }
 
     /**
@@ -130,6 +140,9 @@ interface IRegistry {
     error InvalidDelegation();
     error DifferentSlots();
     error DelegationsAreSame();
+    error AlreadyOptedIn();
+    error NotOptedIn();
+    error OptInDelayNotMet();
     /**
      *
      *                                *

@@ -115,7 +115,7 @@ contract StateLockSlasherTest is UnitTestHelper, PreconfStructs {
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
             proposerSecretKey: SECRET_KEY_1,
             collateral: collateral,
-            withdrawalAddress: operator,
+            owner: operator,
             delegateSecretKey: SECRET_KEY_2,
             committerSecretKey: committerSecretKey,
             committer: committer,

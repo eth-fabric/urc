@@ -45,7 +45,7 @@ contract DummySlasherTest is UnitTestHelper {
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
             proposerSecretKey: SECRET_KEY_1,
             collateral: collateral,
-            withdrawalAddress: operator,
+            owner: operator,
             delegateSecretKey: SECRET_KEY_2,
             committerSecretKey: committerSecretKey,
             committer: committer,
@@ -124,7 +124,7 @@ contract DummySlasherTest is UnitTestHelper {
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
             proposerSecretKey: SECRET_KEY_1,
             collateral: collateral,
-            withdrawalAddress: operator,
+            owner: operator,
             delegateSecretKey: SECRET_KEY_2,
             committerSecretKey: committerSecretKey,
             committer: committer,
@@ -160,7 +160,7 @@ contract DummySlasherTest is UnitTestHelper {
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
             proposerSecretKey: SECRET_KEY_1,
             collateral: collateral,
-            withdrawalAddress: operator,
+            owner: operator,
             delegateSecretKey: SECRET_KEY_2,
             committerSecretKey: committerSecretKey,
             committer: committer,
@@ -195,7 +195,7 @@ contract DummySlasherTest is UnitTestHelper {
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
             proposerSecretKey: SECRET_KEY_1,
             collateral: collateral,
-            withdrawalAddress: operator,
+            owner: operator,
             delegateSecretKey: SECRET_KEY_2,
             committerSecretKey: committerSecretKey,
             committer: committer,
@@ -235,7 +235,7 @@ contract DummySlasherTest is UnitTestHelper {
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
             proposerSecretKey: SECRET_KEY_1,
             collateral: dummySlasher.SLASH_AMOUNT_GWEI() * 1 gwei - 1, // less than the slash amount
-            withdrawalAddress: operator,
+            owner: operator,
             delegateSecretKey: SECRET_KEY_2,
             committerSecretKey: committerSecretKey,
             committer: committer,
@@ -274,7 +274,7 @@ contract DummySlasherTest is UnitTestHelper {
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
             proposerSecretKey: SECRET_KEY_1,
             collateral: collateral,
-            withdrawalAddress: address(rejectEther),
+            owner: address(rejectEther),
             delegateSecretKey: SECRET_KEY_2,
             committerSecretKey: committerSecretKey,
             committer: committer,
@@ -309,7 +309,7 @@ contract DummySlasherTest is UnitTestHelper {
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
             proposerSecretKey: SECRET_KEY_1,
             collateral: collateral,
-            withdrawalAddress: operator,
+            owner: operator,
             delegateSecretKey: SECRET_KEY_2,
             committerSecretKey: committerSecretKey,
             committer: committer,
@@ -404,7 +404,7 @@ contract DummySlasherTest is UnitTestHelper {
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
             proposerSecretKey: SECRET_KEY_1,
             collateral: collateral,
-            withdrawalAddress: operator,
+            owner: operator,
             delegateSecretKey: SECRET_KEY_2,
             committerSecretKey: committerSecretKey,
             committer: committer,
@@ -477,7 +477,7 @@ contract DummySlasherTest is UnitTestHelper {
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
             proposerSecretKey: SECRET_KEY_1,
             collateral: collateral,
-            withdrawalAddress: operator,
+            owner: operator,
             delegateSecretKey: SECRET_KEY_2,
             committerSecretKey: committerSecretKey,
             committer: committer,
@@ -537,7 +537,7 @@ contract DummySlasherTest is UnitTestHelper {
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
             proposerSecretKey: SECRET_KEY_1,
             collateral: collateral,
-            withdrawalAddress: operator,
+            owner: operator,
             delegateSecretKey: SECRET_KEY_2,
             committerSecretKey: committerSecretKey,
             committer: committer,
@@ -578,7 +578,7 @@ contract DummySlasherTest is UnitTestHelper {
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
             proposerSecretKey: SECRET_KEY_1,
             collateral: collateral,
-            withdrawalAddress: operator,
+            owner: operator,
             delegateSecretKey: SECRET_KEY_2,
             committerSecretKey: committerSecretKey,
             committer: committer,
@@ -622,7 +622,7 @@ contract DummySlasherTest is UnitTestHelper {
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
             proposerSecretKey: SECRET_KEY_1,
             collateral: collateral,
-            withdrawalAddress: operator,
+            owner: operator,
             delegateSecretKey: SECRET_KEY_2,
             committerSecretKey: committerSecretKey,
             committer: committer,
@@ -654,7 +654,7 @@ contract DummySlasherTest is UnitTestHelper {
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
             proposerSecretKey: SECRET_KEY_1,
             collateral: collateral,
-            withdrawalAddress: operator,
+            owner: operator,
             delegateSecretKey: SECRET_KEY_2,
             committerSecretKey: committerSecretKey,
             committer: committer,
@@ -697,7 +697,7 @@ contract DummySlasherTest is UnitTestHelper {
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
             proposerSecretKey: SECRET_KEY_1,
             collateral: collateral,
-            withdrawalAddress: operator,
+            owner: operator,
             delegateSecretKey: SECRET_KEY_2,
             committerSecretKey: committerSecretKey,
             committer: committer,
@@ -762,7 +762,7 @@ contract DummySlasherTest is UnitTestHelper {
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
             proposerSecretKey: SECRET_KEY_1,
             collateral: collateral,
-            withdrawalAddress: operator,
+            owner: operator,
             delegateSecretKey: SECRET_KEY_2,
             committerSecretKey: committerSecretKey,
             committer: committer,
@@ -817,7 +817,7 @@ contract DummySlasherTest is UnitTestHelper {
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
             proposerSecretKey: SECRET_KEY_1,
             collateral: collateral,
-            withdrawalAddress: address(0),
+            owner: address(0),
             delegateSecretKey: SECRET_KEY_2,
             committerSecretKey: committerSecretKey,
             committer: committer,

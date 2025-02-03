@@ -21,23 +21,23 @@ contract UnitTestHelper is Test {
     uint256 constant SECRET_KEY_2 = 67890;
 
     /// @dev Helper to create a BLS signature for a registration
-    function _registrationSignature(uint256 secretKey, address withdrawalAddress, uint16 unregistrationDelay)
+    function _registrationSignature(uint256 secretKey, address owner, uint16 unregistrationDelay)
         internal
         view
         returns (BLS.G2Point memory)
     {
-        bytes memory message = abi.encodePacked(withdrawalAddress, unregistrationDelay);
+        bytes memory message = abi.encodePacked(owner, unregistrationDelay);
         return BLS.sign(message, secretKey, registry.DOMAIN_SEPARATOR());
     }
 
     /// @dev Creates a Registration struct with a real BLS keypair
-    function _createRegistration(uint256 secretKey, address withdrawalAddress, uint16 unregistrationDelay)
+    function _createRegistration(uint256 secretKey, address owner, uint16 unregistrationDelay)
         internal
         view
         returns (IRegistry.Registration memory)
     {
         BLS.G1Point memory pubkey = BLS.toPublicKey(secretKey);
-        BLS.G2Point memory signature = _registrationSignature(secretKey, withdrawalAddress, unregistrationDelay);
+        BLS.G2Point memory signature = _registrationSignature(secretKey, owner, unregistrationDelay);
 
         return IRegistry.Registration({ pubkey: pubkey, signature: signature });
     }
@@ -45,7 +45,7 @@ contract UnitTestHelper is Test {
     /// @dev Helper to verify operator data matches expected values
     function _assertRegistration(
         bytes32 registrationRoot,
-        address expectedWithdrawalAddress,
+        address expectedowner,
         uint56 expectedCollateral,
         uint32 expectedRegisteredAt,
         uint32 expectedUnregisteredAt,
@@ -53,7 +53,7 @@ contract UnitTestHelper is Test {
         uint32 expectedSlashedAt
     ) internal view {
         IRegistry.Operator memory operatorData = getRegistrationData(registrationRoot);
-        assertEq(operatorData.withdrawalAddress, expectedWithdrawalAddress, "Wrong withdrawal address");
+        assertEq(operatorData.owner, expectedowner, "Wrong withdrawal address");
         assertEq(operatorData.collateralGwei, expectedCollateral, "Wrong collateral amount");
         assertEq(operatorData.registeredAt, expectedRegisteredAt, "Wrong registration block");
         assertEq(operatorData.unregisteredAt, expectedUnregisteredAt, "Wrong unregistration block");
@@ -117,7 +117,7 @@ contract UnitTestHelper is Test {
 
     function getRegistrationData(bytes32 registrationRoot) public view returns (IRegistry.Operator memory) {
         (
-            address withdrawalAddress,
+            address owner,
             uint56 collateralGwei,
             uint32 registeredAt,
             uint32 unregisteredAt,
@@ -126,7 +126,7 @@ contract UnitTestHelper is Test {
         ) = registry.registrations(registrationRoot);
 
         return IRegistry.Operator({
-            withdrawalAddress: withdrawalAddress,
+            owner: owner,
             collateralGwei: collateralGwei,
             registeredAt: registeredAt,
             unregisteredAt: unregisteredAt,
@@ -135,19 +135,19 @@ contract UnitTestHelper is Test {
         });
     }
 
-    function basicRegistration(uint256 secretKey, uint256 collateral, address withdrawalAddress)
+    function basicRegistration(uint256 secretKey, uint256 collateral, address owner)
         public
         returns (bytes32 registrationRoot, IRegistry.Registration[] memory registrations)
     {
         (uint16 unregistrationDelay,) = _setupBasicRegistrationParams();
 
-        registrations = _setupSingleRegistration(secretKey, withdrawalAddress, unregistrationDelay);
+        registrations = _setupSingleRegistration(secretKey, owner, unregistrationDelay);
 
-        registrationRoot = registry.register{ value: collateral }(registrations, withdrawalAddress, unregistrationDelay);
+        registrationRoot = registry.register{ value: collateral }(registrations, owner, unregistrationDelay);
 
         _assertRegistration(
             registrationRoot,
-            withdrawalAddress,
+            owner,
             uint56(collateral / 1 gwei),
             uint32(block.number),
             type(uint32).max,
@@ -182,7 +182,7 @@ contract UnitTestHelper is Test {
     struct RegisterAndDelegateParams {
         uint256 proposerSecretKey;
         uint256 collateral;
-        address withdrawalAddress;
+        address owner;
         uint256 delegateSecretKey;
         uint256 committerSecretKey;
         address committer;
@@ -203,7 +203,7 @@ contract UnitTestHelper is Test {
     {
         // Single registration
         (result.registrationRoot, result.registrations) =
-            basicRegistration(params.proposerSecretKey, params.collateral, params.withdrawalAddress);
+            basicRegistration(params.proposerSecretKey, params.collateral, params.owner);
 
         // Sign delegation
         ISlasher.Delegation memory delegation = ISlasher.Delegation({

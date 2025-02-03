@@ -164,7 +164,7 @@ contract RegistryTest is UnitTestHelper {
         _assertRegistration(registrationRoot, address(0), 0, 0, 0, 0, 0);
     }
 
-    function test_slashRegistrationHeight1_DifferentWithdrawalAddress() public {
+    function test_slashRegistrationHeight1_DifferentOwner() public {
         (uint16 unregistrationDelay, uint256 minCollateral) = _setupBasicRegistrationParams();
         uint256 collateral = 2 * minCollateral;
 
@@ -312,7 +312,7 @@ contract RegistryTest is UnitTestHelper {
         );
     }
 
-    function test_slashRegistrationHeight2_DifferentWithdrawalAddress() public {
+    function test_slashRegistrationHeight2_DifferentOwner() public {
         (uint16 unregistrationDelay, uint256 minCollateral) = _setupBasicRegistrationParams();
         uint256 collateral = 2 * minCollateral;
 
@@ -473,7 +473,7 @@ contract RegistryTest is UnitTestHelper {
         }
     }
 
-    function test_slashRegistrationFuzz_DifferentWithdrawalAddress(uint8 n) public {
+    function test_slashRegistrationFuzz_DifferentOwner(uint8 n) public {
         vm.assume(n > 0);
         uint256 size = uint256(n);
         (uint16 unregistrationDelay, uint256 minCollateral) = _setupBasicRegistrationParams();
@@ -605,7 +605,7 @@ contract RegistryTest is UnitTestHelper {
 
         // Verify registration was deleted
         IRegistry.Operator memory operatorData = getRegistrationData(registrationRoot);
-        assertEq(operatorData.withdrawalAddress, address(0), "Registration not deleted");
+        assertEq(operatorData.owner, address(0), "Registration not deleted");
     }
 
     function test_claimCollateral_notUnregistered() public {
@@ -751,7 +751,7 @@ contract RegistryTest is UnitTestHelper {
 
         // Verify registration was deleted
         IRegistry.Operator memory operatorData = getRegistrationData(reentrantContract.registrationRoot());
-        assertEq(operatorData.withdrawalAddress, address(0), "Registration not deleted");
+        assertEq(operatorData.owner, address(0), "Registration not deleted");
     }
 
     // For setup we register() -> slashRegistration()
