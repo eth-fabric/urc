@@ -21,23 +21,23 @@ contract UnitTestHelper is Test {
     uint256 constant SECRET_KEY_2 = 67890;
 
     /// @dev Helper to create a BLS signature for a registration
-    function _registrationSignature(uint256 secretKey, address owner, uint16 unregistrationDelay)
+    function _registrationSignature(uint256 secretKey, address owner)
         internal
         view
         returns (BLS.G2Point memory)
     {
-        bytes memory message = abi.encodePacked(owner, unregistrationDelay);
+        bytes memory message = abi.encode(owner);
         return BLS.sign(message, secretKey, registry.DOMAIN_SEPARATOR());
     }
 
     /// @dev Creates a Registration struct with a real BLS keypair
-    function _createRegistration(uint256 secretKey, address owner, uint16 unregistrationDelay)
+    function _createRegistration(uint256 secretKey, address owner)
         internal
         view
         returns (IRegistry.Registration memory)
     {
         BLS.G1Point memory pubkey = BLS.toPublicKey(secretKey);
-        BLS.G2Point memory signature = _registrationSignature(secretKey, owner, unregistrationDelay);
+        BLS.G2Point memory signature = _registrationSignature(secretKey, owner);
 
         return IRegistry.Registration({ pubkey: pubkey, signature: signature });
     }
@@ -49,7 +49,6 @@ contract UnitTestHelper is Test {
         uint56 expectedCollateral,
         uint32 expectedRegisteredAt,
         uint32 expectedUnregisteredAt,
-        uint16 expectedUnregistrationDelay,
         uint32 expectedSlashedAt
     ) internal view {
         IRegistry.Operator memory operatorData = getRegistrationData(registrationRoot);
@@ -57,7 +56,6 @@ contract UnitTestHelper is Test {
         assertEq(operatorData.collateralGwei, expectedCollateral, "Wrong collateral amount");
         assertEq(operatorData.registeredAt, expectedRegisteredAt, "Wrong registration block");
         assertEq(operatorData.unregisteredAt, expectedUnregisteredAt, "Wrong unregistration block");
-        assertEq(operatorData.unregistrationDelay, expectedUnregistrationDelay, "Wrong unregistration delay");
         assertEq(operatorData.slashedAt, expectedSlashedAt, "Wrong slashed block");
     }
 
@@ -69,19 +67,13 @@ contract UnitTestHelper is Test {
         return leaves;
     }
 
-    // New helper functions
-    function _setupBasicRegistrationParams() internal view returns (uint16 unregistrationDelay, uint256 collateral) {
-        unregistrationDelay = uint16(registry.MIN_UNREGISTRATION_DELAY());
-        collateral = registry.MIN_COLLATERAL();
-    }
-
-    function _setupSingleRegistration(uint256 secretKey, address withdrawalAddr, uint16 unregistrationDelay)
+    function _setupSingleRegistration(uint256 secretKey, address owner)
         internal
         view
         returns (IRegistry.Registration[] memory)
     {
         IRegistry.Registration[] memory registrations = new IRegistry.Registration[](1);
-        registrations[0] = _createRegistration(secretKey, withdrawalAddr, unregistrationDelay);
+        registrations[0] = _createRegistration(secretKey, owner);
         return registrations;
     }
 
@@ -121,7 +113,6 @@ contract UnitTestHelper is Test {
             uint56 collateralGwei,
             uint32 registeredAt,
             uint32 unregisteredAt,
-            uint16 unregistrationDelay,
             uint32 slashedAt
         ) = registry.registrations(registrationRoot);
 
@@ -130,7 +121,6 @@ contract UnitTestHelper is Test {
             collateralGwei: collateralGwei,
             registeredAt: registeredAt,
             unregisteredAt: unregisteredAt,
-            unregistrationDelay: unregistrationDelay,
             slashedAt: slashedAt
         });
     }
@@ -139,11 +129,9 @@ contract UnitTestHelper is Test {
         public
         returns (bytes32 registrationRoot, IRegistry.Registration[] memory registrations)
     {
-        (uint16 unregistrationDelay,) = _setupBasicRegistrationParams();
+        registrations = _setupSingleRegistration(secretKey, owner);
 
-        registrations = _setupSingleRegistration(secretKey, owner, unregistrationDelay);
-
-        registrationRoot = registry.register{ value: collateral }(registrations, owner, unregistrationDelay);
+        registrationRoot = registry.register{ value: collateral }(registrations, owner);
 
         _assertRegistration(
             registrationRoot,
@@ -151,7 +139,6 @@ contract UnitTestHelper is Test {
             uint56(collateral / 1 gwei),
             uint32(block.number),
             type(uint32).max,
-            unregistrationDelay,
             0
         );
     }
@@ -223,12 +210,11 @@ contract UnitTestHelper is Test {
     {
         ReentrantSlashCommitment reentrantContract = new ReentrantSlashCommitment(address(registry));
 
-        (uint16 unregistrationDelay,) = _setupBasicRegistrationParams();
-        result.registrations = _setupSingleRegistration(SECRET_KEY_1, address(reentrantContract), unregistrationDelay);
+        result.registrations = _setupSingleRegistration(SECRET_KEY_1, address(reentrantContract));
 
         // register via reentrant contract
         vm.deal(address(reentrantContract), 100 ether);
-        reentrantContract.register(result.registrations, unregistrationDelay);
+        reentrantContract.register(result.registrations);
         result.registrationRoot = reentrantContract.registrationRoot();
         reentrantContractAddress = address(reentrantContract);
 
@@ -293,11 +279,10 @@ contract ReentrantContract {
         return leaves;
     }
 
-    function register(IRegistry.Registration[] memory _registrations, uint16 _unregistrationDelay) public {
+    function register(IRegistry.Registration[] memory _registrations) public {
         require(_registrations.length == 1, "test harness supports only 1 registration");
         registrations[0] = _registrations[0];
-        unregistrationDelay = _unregistrationDelay;
-        registrationRoot = registry.register{ value: collateral }(_registrations, address(this), _unregistrationDelay);
+        registrationRoot = registry.register{ value: collateral }(_registrations, address(this));
     }
 
     function unregister() public {
@@ -372,7 +357,7 @@ contract ReentrantSlashableRegistrationContract is ReentrantContract {
         IRegistry.Registration[] memory _registrations = new IRegistry.Registration[](1);
         _registrations[0] = registrations[0];
         require(_registrations.length == 1, "test harness supports only 1 registration");
-        register(_registrations, unregistrationDelay);
+        register(_registrations);
 
         require(registrationRoot == oldRegistrationRoot, "registration root should not change");
 

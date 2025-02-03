@@ -22,7 +22,7 @@ contract Registry is IRegistry {
 
     // Constants
     uint256 public constant MIN_COLLATERAL = 0.1 ether;
-    uint256 public constant MIN_UNREGISTRATION_DELAY = 64; // Two epochs
+    uint256 public constant UNREGISTRATION_DELAY = 7200; // 1 day
     uint256 public constant FRAUD_PROOF_WINDOW = 7200; // 1 day
     uint32 public constant SLASH_WINDOW = 7200; // 1 day
     uint32 public constant OPT_IN_DELAY = 7200; // 1 day
@@ -36,19 +36,14 @@ contract Registry is IRegistry {
     /// @dev The function will revert if the operator has already registered the same `regs`, if they sent less than `MIN_COLLATERAL`, if the unregistration delay is less than `MIN_UNREGISTRATION_DELAY`, or if the registration root is invalid.
     /// @param regs The BLS keys to register
     /// @param owner The authorized address to perform actions on behalf of the operator
-    /// @param unregistrationDelay The number of blocks before the operator can be unregistered
     /// @return registrationRoot The merkle root of the registration
-    function register(Registration[] calldata regs, address owner, uint16 unregistrationDelay)
+    function register(Registration[] calldata regs, address owner)
         external
         payable
         returns (bytes32 registrationRoot)
     {
         if (msg.value < MIN_COLLATERAL) {
             revert InsufficientCollateral();
-        }
-
-        if (unregistrationDelay < MIN_UNREGISTRATION_DELAY) {
-            revert UnregistrationDelayTooShort();
         }
 
         registrationRoot = _merkleizeRegistrations(regs);
@@ -65,12 +60,11 @@ contract Registry is IRegistry {
             owner: owner,
             collateralGwei: uint56(msg.value / 1 gwei),
             registeredAt: uint32(block.number),
-            unregistrationDelay: unregistrationDelay,
             unregisteredAt: type(uint32).max,
             slashedAt: 0
         });
 
-        emit OperatorRegistered(registrationRoot, msg.value, unregistrationDelay);
+        emit OperatorRegistered(registrationRoot, uint56(msg.value / 1 gwei), owner, block.number);
     }
 
     /// @notice Verify a merkle proof against a given `registrationRoot`
@@ -117,7 +111,7 @@ contract Registry is IRegistry {
         }
 
         // Reconstruct registration message
-        bytes memory message = abi.encodePacked(operatorOwner, operator.unregistrationDelay);
+        bytes memory message = abi.encode(operatorOwner);
 
         // Verify registration signature
         if (BLS.verify(message, reg.signature, reg.pubkey, DOMAIN_SEPARATOR)) {
@@ -184,7 +178,7 @@ contract Registry is IRegistry {
         }
 
         // Check that enough time has passed
-        if (block.number < operator.unregisteredAt + operator.unregistrationDelay) {
+        if (block.number < operator.unregisteredAt + UNREGISTRATION_DELAY) {
             revert UnregistrationDelayNotMet();
         }
 
@@ -302,10 +296,7 @@ contract Registry is IRegistry {
             revert FraudProofWindowNotMet();
         }
 
-        if (
-            operator.unregisteredAt != type(uint32).max
-                && block.number > operator.unregisteredAt + operator.unregistrationDelay
-        ) {
+        if (operator.unregisteredAt != type(uint32).max && block.number > operator.unregisteredAt + UNREGISTRATION_DELAY) {
             revert OperatorAlreadyUnregistered();
         }
 
@@ -384,10 +375,7 @@ contract Registry is IRegistry {
             revert FraudProofWindowNotMet();
         }
 
-        if (
-            operator.unregisteredAt != type(uint32).max
-                && block.number > operator.unregisteredAt + operator.unregistrationDelay
-        ) {
+        if (operator.unregisteredAt != type(uint32).max && block.number > operator.unregisteredAt + UNREGISTRATION_DELAY) {
             revert OperatorAlreadyUnregistered();
         }
 

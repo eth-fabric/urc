@@ -31,8 +31,6 @@ interface IRegistry {
         uint32 registeredAt;
         /// The block number when deregistration occurred
         uint32 unregisteredAt;
-        /// The number of blocks that must elapse between deregistering and claiming
-        uint16 unregistrationDelay;
         /// The block number when slashed from breaking a commitment
         uint32 slashedAt;
     }
@@ -56,9 +54,10 @@ interface IRegistry {
      */
     /// @notice Emitted when an operator is registered
     /// @param registrationRoot The merkle root of the registration merkle tree
-    /// @param collateral The collateral amount in GWEI
-    /// @param unregistrationDelay The delay before the operator can claim collateral after registering
-    event OperatorRegistered(bytes32 registrationRoot, uint256 collateral, uint16 unregistrationDelay);
+    /// @param collateralGwei The collateral amount in GWEI
+    /// @param owner The owner of the operator
+    /// @param registeredAt The block number when the operator was registered
+    event OperatorRegistered(bytes32 indexed registrationRoot, uint256 collateralGwei, address owner, uint256 registeredAt);
 
     /// @notice Emitted when a BLS key is registered
     /// @param leafIndex The index of the BLS key in the registration merkle tree
@@ -69,10 +68,10 @@ interface IRegistry {
     /// @notice Emitted when an operator is slashed for a fraudulent registration
     /// @param registrationRoot The merkle root of the registration merkle tree
     /// @param challenger The address of the challenger
-    /// @param withdrawalAddress The withdrawal address of the operator
+    /// @param owner The owner of the operator
     /// @param reg The fraudulent registration
     event RegistrationSlashed(
-        bytes32 registrationRoot, address challenger, address withdrawalAddress, Registration reg
+        bytes32 indexed registrationRoot, address challenger, address owner, Registration reg
     );
 
     /// @notice Emitted when an operator is slashed for breaking a commitment
@@ -81,42 +80,42 @@ interface IRegistry {
     /// @param rewardAmountGwei The amount of GWEI rewarded to the caller
     /// @param pubkey The BLS public key
     event OperatorSlashed(
-        bytes32 registrationRoot, uint256 slashAmountGwei, uint256 rewardAmountGwei, BLS.G1Point pubkey
+        bytes32 indexed registrationRoot, uint256 slashAmountGwei, uint256 rewardAmountGwei, BLS.G1Point pubkey
     );
 
     /// @notice Emitted when an operator is slashed for equivocation
     /// @param registrationRoot The merkle root of the registration merkle tree
     /// @param rewardAmountGwei The amount of GWEI rewarded to the caller
     /// @param pubkey The BLS public key
-    event OperatorEquivocated(bytes32 registrationRoot, uint256 rewardAmountGwei, BLS.G1Point pubkey);
+    event OperatorEquivocated(bytes32 indexed registrationRoot, uint256 rewardAmountGwei, BLS.G1Point pubkey);
 
     /// @notice Emitted when an operator is unregistered
     /// @param registrationRoot The merkle root of the registration merkle tree
     /// @param unregisteredAt The block number when the operator was unregistered
-    event OperatorUnregistered(bytes32 registrationRoot, uint32 unregisteredAt);
+    event OperatorUnregistered(bytes32 indexed registrationRoot, uint32 unregisteredAt);
 
     /// @notice Emitted when collateral is claimed
     /// @param registrationRoot The merkle root of the registration merkle tree
     /// @param collateralGwei The amount of GWEI claimed
-    event CollateralClaimed(bytes32 registrationRoot, uint256 collateralGwei);
+    event CollateralClaimed(bytes32 indexed registrationRoot, uint256 collateralGwei);
 
     /// @notice Emitted when collateral is added
     /// @param registrationRoot The merkle root of the registration merkle tree
     /// @param collateralGwei The amount of GWEI added
-    event CollateralAdded(bytes32 registrationRoot, uint256 collateralGwei);
+    event CollateralAdded(bytes32 indexed registrationRoot, uint256 collateralGwei);
 
     /// @notice Emitted when an operator is opted into a proposer commitment protocol
     /// @param registrationRoot The merkle root of the registration merkle tree
     /// @param slasher The address of the Slasher contract
     /// @param committer The address of the key used for commitments
     /// @param optedInAt The block number when the operator opted in
-    event OperatorOptedIn(bytes32 registrationRoot, address slasher, address committer, uint64 optedInAt);
+    event OperatorOptedIn(bytes32 indexed registrationRoot, address slasher, address committer, uint64 optedInAt);
 
     /// @notice Emitted when an operator is opted out of a proposer commitment protocol
     /// @param registrationRoot The merkle root of the registration merkle tree
     /// @param slasher The address of the Slasher contract
     /// @param optedOutAt The block number when the operator opted out
-    event OperatorOptedOut(bytes32 registrationRoot, address slasher, uint64 optedOutAt);
+    event OperatorOptedOut(bytes32 indexed registrationRoot, address slasher, uint64 optedOutAt);
 
     /**
      *
@@ -126,7 +125,6 @@ interface IRegistry {
      *
      */
     error InsufficientCollateral();
-    error UnregistrationDelayTooShort();
     error OperatorAlreadyRegistered();
     error InvalidRegistrationRoot();
     error EthTransferFailed();
@@ -164,7 +162,7 @@ interface IRegistry {
      *
      */
 
-    function register(Registration[] calldata registrations, address withdrawalAddress, uint16 unregistrationDelay)
+    function register(Registration[] calldata registrations, address owner)
         external
         payable
         returns (bytes32 registrationRoot);

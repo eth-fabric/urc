@@ -396,7 +396,7 @@ contract DummySlasherTest is UnitTestHelper {
         );
 
         // verify operator was deleted
-        _assertRegistration(result.registrationRoot, address(0), 0, 0, 0, 0, 0);
+        _assertRegistration(result.registrationRoot, address(0), 0, 0, 0, 0);
     }
 
     // test multiple slashings
@@ -795,7 +795,7 @@ contract DummySlasherTest is UnitTestHelper {
         registry.unregister(result.registrationRoot);
 
         // Move past unregistration delay
-        vm.roll(block.number + registry.MIN_UNREGISTRATION_DELAY() + 1);
+        vm.roll(block.number + registry.UNREGISTRATION_DELAY() + 1);
 
         vm.startPrank(challenger);
         vm.expectRevert(IRegistry.OperatorAlreadyUnregistered.selector);
