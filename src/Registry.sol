@@ -25,6 +25,7 @@ contract Registry is IRegistry {
     uint256 public constant MIN_UNREGISTRATION_DELAY = 64; // Two epochs
     uint256 public constant FRAUD_PROOF_WINDOW = 7200; // 1 day
     uint32 public constant SLASH_WINDOW = 7200; // 1 day
+    uint32 public constant OPT_IN_DELAY = 7200; // 1 day
     address internal constant BURNER_ADDRESS = address(0x0000000000000000000000000000000000000000);
     bytes public constant DOMAIN_SEPARATOR = "0x00435255"; // "URC" in little endian
     bytes public constant DELEGATION_DOMAIN_SEPARATOR = "0x0044656c"; // "Del" in little endian
@@ -218,6 +219,41 @@ contract Registry is IRegistry {
         }
 
         emit CollateralClaimed(registrationRoot, collateralGwei);
+    }
+
+    /// @notice Opts an operator into a proposer commtiment protocol via Slasher contract
+    /// @dev The function will revert if the operator has not registered or if the caller is not the operator's owner
+    /// @param registrationRoot The merkle root generated and stored from the register() function
+    /// @param slasher The address of the Slasher contract to opt into
+    /// @param committer The address of the key used for commitments
+    function optInToSlasher(bytes32 registrationRoot, address slasher, address committer) external {
+        Operator storage operator = registrations[registrationRoot];
+
+        if (operator.owner != msg.sender) {
+            revert WrongOperator();
+        }
+
+        // Create a unique identifier for the slasher commitment
+        bytes32 slasherCommitmentId = keccak256(abi.encode(registrationRoot, slasher));
+
+        // Cache the SlasherCommitment struct
+        SlasherCommitment storage slasherCommitment = slasherCommitments[slasherCommitmentId];
+
+        // Check if already opted in
+        if (slasherCommitment.optedOutAt < slasherCommitment.optedInAt) {
+            revert AlreadyOptedIn();
+        }
+
+        // If previously opted out, enforce a delay before allowing new opt-in
+        if (slasherCommitment.optedOutAt != 0 && block.timestamp < slasherCommitment.optedOutAt + OPT_IN_DELAY) {
+            revert OptInDelayNotMet();
+        }
+
+        slasherCommitment.optedInAt = uint64(block.number);
+        slasherCommitment.optedOutAt = 0;
+        slasherCommitment.committer = committer;
+
+        emit OperatorOptedIn(registrationRoot, slasher, committer, slasherCommitment.optedInAt);
     }
 
     /// @notice Slashes an operator for breaking a commitment

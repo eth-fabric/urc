@@ -105,6 +105,13 @@ interface IRegistry {
     /// @param collateralGwei The amount of GWEI added
     event CollateralAdded(bytes32 registrationRoot, uint256 collateralGwei);
 
+    /// @notice Emitted when an operator is opted into a proposer commitment protocol
+    /// @param registrationRoot The merkle root of the registration merkle tree
+    /// @param slasher The address of the Slasher contract
+    /// @param committer The address of the key used for commitments
+    /// @param optedInAt The block number when the operator opted in
+    event OperatorOptedIn(bytes32 registrationRoot, address slasher, address committer, uint64 optedInAt);
+
     /**
      *
      *                                *
