@@ -30,7 +30,13 @@ contract Registry is IRegistry {
     bytes public constant DOMAIN_SEPARATOR = "0x00435255"; // "URC" in little endian
     bytes public constant DELEGATION_DOMAIN_SEPARATOR = "0x0044656c"; // "Del" in little endian
 
-    /// @notice Batch registers an operator's BLS keys and collateral to the registry
+    /**
+     *
+     *                                Registration/Unregistration Functions                           *
+     *
+     */
+
+    /// @notice Batch registers an operator's BLS keys and collateral to the URC
     /// @dev Registration signatures are optimistically verified. They are expected to be signed with the `DOMAIN_SEPARATOR` mixin.
     /// @dev The function will merkleize the supplied `regs` and map the registration root to an Operator struct.
     /// @dev The function will revert if the operator has already registered the same `regs`, if they sent less than `MIN_COLLATERAL`, if the unregistration delay is less than `MIN_UNREGISTRATION_DELAY`, or if the registration root is invalid.
@@ -67,20 +73,94 @@ contract Registry is IRegistry {
         emit OperatorRegistered(registrationRoot, uint56(msg.value / 1 gwei), owner, block.number);
     }
 
-    /// @notice Verify a merkle proof against a given `registrationRoot`
-    /// @dev The function will return the operator's collateral amount if the proof is valid or 0 if the proof is invalid.
+    /// @notice Starts the process to unregister an operator from the URC
+    /// @dev The function will revert if the operator has already unregistered, if the operator has not registered, or if the caller is not the operator's withdrawal address.
+    /// @dev The function will mark the `unregisteredAt` timestamp in the Operator struct. The operator can claim their collateral after the `unregistrationDelay` more blocks have passed.
     /// @param registrationRoot The merkle root generated and stored from the register() function
-    /// @param leaf The leaf to verify
-    /// @param proof The merkle proof to verify the operator's key is in the registry
-    /// @param leafIndex The index of the leaf in the merkle tree
-    /// @return collateralGwei The collateral amount in GWEI
-    function verifyMerkleProof(bytes32 registrationRoot, bytes32 leaf, bytes32[] calldata proof, uint256 leafIndex)
-        external
-        view
-        returns (uint256 collateralGwei)
-    {
-        collateralGwei = _verifyMerkleProof(registrationRoot, leaf, proof, leafIndex);
+    function unregister(bytes32 registrationRoot) external {
+        Operator storage operator = registrations[registrationRoot];
+
+        if (operator.owner != msg.sender) {
+            revert WrongOperator();
+        }
+
+        // Check that they haven't already unregistered
+        if (operator.unregisteredAt != type(uint32).max) {
+            revert AlreadyUnregistered();
+        }
+
+        // Set unregistration timestamp
+        operator.unregisteredAt = uint32(block.number);
+
+        emit OperatorUnregistered(registrationRoot, operator.unregisteredAt);
     }
+    /// @notice Opts an operator into a proposer commtiment protocol via Slasher contract
+    /// @dev The function will revert if the operator has not registered or if the caller is not the operator's owner
+    /// @param registrationRoot The merkle root generated and stored from the register() function
+    /// @param slasher The address of the Slasher contract to opt into
+    /// @param committer The address of the key used for commitments
+
+    function optInToSlasher(bytes32 registrationRoot, address slasher, address committer) external {
+        Operator storage operator = registrations[registrationRoot];
+
+        if (operator.owner != msg.sender) {
+            revert WrongOperator();
+        }
+
+        // Create a unique identifier for the slasher commitment
+        bytes32 slasherCommitmentId = keccak256(abi.encode(registrationRoot, slasher));
+
+        // Cache the SlasherCommitment struct
+        SlasherCommitment storage slasherCommitment = slasherCommitments[slasherCommitmentId];
+
+        // Check if already opted in
+        if (slasherCommitment.optedOutAt < slasherCommitment.optedInAt) {
+            revert AlreadyOptedIn();
+        }
+
+        // If previously opted out, enforce a delay before allowing new opt-in
+        if (slasherCommitment.optedOutAt != 0 && block.timestamp < slasherCommitment.optedOutAt + OPT_IN_DELAY) {
+            revert OptInDelayNotMet();
+        }
+
+        slasherCommitment.optedInAt = uint64(block.number);
+        slasherCommitment.optedOutAt = 0;
+        slasherCommitment.committer = committer;
+
+        emit OperatorOptedIn(registrationRoot, slasher, committer, slasherCommitment.optedInAt);
+    }
+
+    /// @notice Opts out of a protocol for an operator
+    /// @dev The function will revert if the operator has not registered, if the caller is not the operator's owner, or if the operator is not opted into the protocol
+    /// @param registrationRoot The merkle root generated and stored from the register() function
+    /// @param slasher The address of the Slasher contract to opt out of
+    function optOutOfSlasher(bytes32 registrationRoot, address slasher) external {
+        Operator storage operator = registrations[registrationRoot];
+
+        if (operator.owner != msg.sender) {
+            revert WrongOperator();
+        }
+
+        bytes32 slasherCommitmentId = keccak256(abi.encode(registrationRoot, slasher));
+
+        // Cache the SlasherCommitment struct
+        SlasherCommitment storage slasherCommitment = slasherCommitments[slasherCommitmentId];
+
+        // Check if already opted out or never opted in
+        if (slasherCommitment.optedOutAt >= slasherCommitment.optedInAt) {
+            revert NotOptedIn();
+        }
+
+        slasherCommitment.optedOutAt = uint64(block.number);
+
+        emit OperatorOptedOut(registrationRoot, slasher, slasherCommitment.optedOutAt);
+    }
+
+    /**
+     *
+     *                                Slashing Functions                           *
+     *
+     */
 
     /// @notice Slash an operator for submitting a fraudulent `Registration` in the register() function
     /// @dev To save BLS verification gas costs, the URC optimistically accepts registration signatures. This function allows a challenger to slash the operator by executing the BLS verification to prove the registration is fraudulent.
@@ -141,127 +221,6 @@ contract Registry is IRegistry {
         return MIN_COLLATERAL;
     }
 
-    /// @notice Starts the unregistration process for an operator
-    /// @dev The function will revert if the operator has already unregistered, if the operator has not registered, or if the caller is not the operator's withdrawal address.
-    /// @dev The function will mark the `unregisteredAt` timestamp in the Operator struct. The operator can claim their collateral after the `unregistrationDelay` more blocks have passed.
-    /// @param registrationRoot The merkle root generated and stored from the register() function
-    function unregister(bytes32 registrationRoot) external {
-        Operator storage operator = registrations[registrationRoot];
-
-        if (operator.owner != msg.sender) {
-            revert WrongOperator();
-        }
-
-        // Check that they haven't already unregistered
-        if (operator.unregisteredAt != type(uint32).max) {
-            revert AlreadyUnregistered();
-        }
-
-        // Set unregistration timestamp
-        operator.unregisteredAt = uint32(block.number);
-
-        emit OperatorUnregistered(registrationRoot, operator.unregisteredAt);
-    }
-
-    /// @notice Claims an operator's collateral after the unregistration delay
-    /// @dev The function will revert if the operator does not exist, if the operator has not unregistered, if the `unregistrationDelay` has not passed, or if there is no collateral to claim.
-    /// @dev The function will transfer the operator's collateral to their registered `withdrawalAddress`.
-    /// @param registrationRoot The merkle root generated and stored from the register() function
-    function claimCollateral(bytes32 registrationRoot) external {
-        Operator storage operator = registrations[registrationRoot];
-        address operatorOwner = operator.owner;
-        uint256 collateralGwei = operator.collateralGwei;
-
-        // Check that they've unregistered
-        if (operator.unregisteredAt == type(uint32).max) {
-            revert NotUnregistered();
-        }
-
-        // Check that enough time has passed
-        if (block.number < operator.unregisteredAt + UNREGISTRATION_DELAY) {
-            revert UnregistrationDelayNotMet();
-        }
-
-        // Check there's collateral to claim
-        if (collateralGwei == 0) {
-            revert NoCollateralToClaim();
-        }
-
-        uint256 amountToReturn = collateralGwei * 1 gwei;
-
-        // Clear operator info
-        delete registrations[registrationRoot];
-
-        // Transfer to operator
-        (bool success,) = operatorOwner.call{ value: amountToReturn }("");
-        if (!success) {
-            revert EthTransferFailed();
-        }
-
-        emit CollateralClaimed(registrationRoot, collateralGwei);
-    }
-
-    /// @notice Opts an operator into a proposer commtiment protocol via Slasher contract
-    /// @dev The function will revert if the operator has not registered or if the caller is not the operator's owner
-    /// @param registrationRoot The merkle root generated and stored from the register() function
-    /// @param slasher The address of the Slasher contract to opt into
-    /// @param committer The address of the key used for commitments
-    function optInToSlasher(bytes32 registrationRoot, address slasher, address committer) external {
-        Operator storage operator = registrations[registrationRoot];
-
-        if (operator.owner != msg.sender) {
-            revert WrongOperator();
-        }
-
-        // Create a unique identifier for the slasher commitment
-        bytes32 slasherCommitmentId = keccak256(abi.encode(registrationRoot, slasher));
-
-        // Cache the SlasherCommitment struct
-        SlasherCommitment storage slasherCommitment = slasherCommitments[slasherCommitmentId];
-
-        // Check if already opted in
-        if (slasherCommitment.optedOutAt < slasherCommitment.optedInAt) {
-            revert AlreadyOptedIn();
-        }
-
-        // If previously opted out, enforce a delay before allowing new opt-in
-        if (slasherCommitment.optedOutAt != 0 && block.timestamp < slasherCommitment.optedOutAt + OPT_IN_DELAY) {
-            revert OptInDelayNotMet();
-        }
-
-        slasherCommitment.optedInAt = uint64(block.number);
-        slasherCommitment.optedOutAt = 0;
-        slasherCommitment.committer = committer;
-
-        emit OperatorOptedIn(registrationRoot, slasher, committer, slasherCommitment.optedInAt);
-    }
-
-    /// @notice Opts out of a protocol for an operator
-    /// @dev The function will revert if the operator has not registered, if the caller is not the operator's owner, or if the operator is not opted into the protocol
-    /// @param registrationRoot The merkle root generated and stored from the register() function
-    /// @param slasher The address of the Slasher contract to opt out of
-    function optOutOfSlasher(bytes32 registrationRoot, address slasher) external {
-        Operator storage operator = registrations[registrationRoot];
-
-        if (operator.owner != msg.sender) {
-            revert WrongOperator();
-        }
-
-        bytes32 slasherCommitmentId = keccak256(abi.encode(registrationRoot, slasher));
-
-        // Cache the SlasherCommitment struct
-        SlasherCommitment storage slasherCommitment = slasherCommitments[slasherCommitmentId];
-
-        // Check if already opted out or never opted in
-        if (slasherCommitment.optedOutAt >= slasherCommitment.optedInAt) {
-            revert NotOptedIn();
-        }
-
-        slasherCommitment.optedOutAt = uint64(block.number);
-
-        emit OperatorOptedOut(registrationRoot, slasher, slasherCommitment.optedOutAt);
-    }
-
     /// @notice Slashes an operator for breaking a commitment
     /// @dev The function verifies `proof` to first ensure the operator's key is in the registry, then verifies the `signedDelegation` was signed by the key. If the fraud proof window has passed, the URC will call the `slash()` function of the Slasher contract specified in the `signedDelegation`. The Slasher contract will determine if the operator has broken a commitment and return the amount of GWEI to be slashed at the URC.
     /// @dev The function will burn `slashAmountGwei` and transfer `rewardAmountGwei` to the caller. It will also save the timestamp of the slashing to start the `SLASH_WINDOW` in case of multiple slashings.
@@ -296,7 +255,9 @@ contract Registry is IRegistry {
             revert FraudProofWindowNotMet();
         }
 
-        if (operator.unregisteredAt != type(uint32).max && block.number > operator.unregisteredAt + UNREGISTRATION_DELAY) {
+        if (
+            operator.unregisteredAt != type(uint32).max && block.number > operator.unregisteredAt + UNREGISTRATION_DELAY
+        ) {
             revert OperatorAlreadyUnregistered();
         }
 
@@ -375,7 +336,9 @@ contract Registry is IRegistry {
             revert FraudProofWindowNotMet();
         }
 
-        if (operator.unregisteredAt != type(uint32).max && block.number > operator.unregisteredAt + UNREGISTRATION_DELAY) {
+        if (
+            operator.unregisteredAt != type(uint32).max && block.number > operator.unregisteredAt + UNREGISTRATION_DELAY
+        ) {
             revert OperatorAlreadyUnregistered();
         }
 
@@ -420,6 +383,12 @@ contract Registry is IRegistry {
         emit OperatorEquivocated(registrationRoot, MIN_COLLATERAL, delegationOne.delegation.proposer);
     }
 
+    /**
+     *
+     *                                Collateral Functions                           *
+     *
+     */
+
     /// @notice Adds collateral to an Operator struct
     /// @dev The function will revert if the operator does not exist or if the collateral amount overflows the `collateralGwei` field.
     /// @param registrationRoot The merkle root generated and stored from the register() function
@@ -435,6 +404,44 @@ contract Registry is IRegistry {
 
         operator.collateralGwei += uint56(msg.value / 1 gwei);
         emit CollateralAdded(registrationRoot, operator.collateralGwei);
+    }
+
+    /// @notice Claims an operator's collateral after the unregistration delay
+    /// @dev The function will revert if the operator does not exist, if the operator has not unregistered, if the `unregistrationDelay` has not passed, or if there is no collateral to claim.
+    /// @dev The function will transfer the operator's collateral to their registered `withdrawalAddress`.
+    /// @param registrationRoot The merkle root generated and stored from the register() function
+    function claimCollateral(bytes32 registrationRoot) external {
+        Operator storage operator = registrations[registrationRoot];
+        address operatorOwner = operator.owner;
+        uint256 collateralGwei = operator.collateralGwei;
+
+        // Check that they've unregistered
+        if (operator.unregisteredAt == type(uint32).max) {
+            revert NotUnregistered();
+        }
+
+        // Check that enough time has passed
+        if (block.number < operator.unregisteredAt + UNREGISTRATION_DELAY) {
+            revert UnregistrationDelayNotMet();
+        }
+
+        // Check there's collateral to claim
+        if (collateralGwei == 0) {
+            revert NoCollateralToClaim();
+        }
+
+        uint256 amountToReturn = collateralGwei * 1 gwei;
+
+        // Clear operator info
+        delete registrations[registrationRoot];
+
+        // Transfer to operator
+        (bool success,) = operatorOwner.call{ value: amountToReturn }("");
+        if (!success) {
+            revert EthTransferFailed();
+        }
+
+        emit CollateralClaimed(registrationRoot, collateralGwei);
     }
 
     function claimSlashedCollateral(bytes32 registrationRoot) external {
@@ -468,9 +475,24 @@ contract Registry is IRegistry {
 
     /**
      *
-     *                                Internal Functions                           *
+     *                                Helper Functions                           *
      *
      */
+
+    /// @notice Verify a merkle proof against a given `registrationRoot`
+    /// @dev The function will return the operator's collateral amount if the proof is valid or 0 if the proof is invalid.
+    /// @param registrationRoot The merkle root generated and stored from the register() function
+    /// @param leaf The leaf to verify
+    /// @param proof The merkle proof to verify the operator's key is in the registry
+    /// @param leafIndex The index of the leaf in the merkle tree
+    /// @return collateralGwei The collateral amount in GWEI
+    function verifyMerkleProof(bytes32 registrationRoot, bytes32 leaf, bytes32[] calldata proof, uint256 leafIndex)
+        external
+        view
+        returns (uint256 collateralGwei)
+    {
+        collateralGwei = _verifyMerkleProof(registrationRoot, leaf, proof, leafIndex);
+    }
 
     /// @notice Merkleizes an array of `Registration` structs
     /// @dev Leaves are created by abi-encoding the `Registration` structs, then hashing with keccak256.

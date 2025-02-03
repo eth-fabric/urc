@@ -21,11 +21,7 @@ contract UnitTestHelper is Test {
     uint256 constant SECRET_KEY_2 = 67890;
 
     /// @dev Helper to create a BLS signature for a registration
-    function _registrationSignature(uint256 secretKey, address owner)
-        internal
-        view
-        returns (BLS.G2Point memory)
-    {
+    function _registrationSignature(uint256 secretKey, address owner) internal view returns (BLS.G2Point memory) {
         bytes memory message = abi.encode(owner);
         return BLS.sign(message, secretKey, registry.DOMAIN_SEPARATOR());
     }
@@ -108,13 +104,8 @@ contract UnitTestHelper is Test {
     }
 
     function getRegistrationData(bytes32 registrationRoot) public view returns (IRegistry.Operator memory) {
-        (
-            address owner,
-            uint56 collateralGwei,
-            uint32 registeredAt,
-            uint32 unregisteredAt,
-            uint32 slashedAt
-        ) = registry.registrations(registrationRoot);
+        (address owner, uint56 collateralGwei, uint32 registeredAt, uint32 unregisteredAt, uint32 slashedAt) =
+            registry.registrations(registrationRoot);
 
         return IRegistry.Operator({
             owner: owner,
@@ -134,12 +125,7 @@ contract UnitTestHelper is Test {
         registrationRoot = registry.register{ value: collateral }(registrations, owner);
 
         _assertRegistration(
-            registrationRoot,
-            owner,
-            uint56(collateral / 1 gwei),
-            uint32(block.number),
-            type(uint32).max,
-            0
+            registrationRoot, owner, uint56(collateral / 1 gwei), uint32(block.number), type(uint32).max, 0
         );
     }
 

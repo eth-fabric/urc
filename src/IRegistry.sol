@@ -57,7 +57,9 @@ interface IRegistry {
     /// @param collateralGwei The collateral amount in GWEI
     /// @param owner The owner of the operator
     /// @param registeredAt The block number when the operator was registered
-    event OperatorRegistered(bytes32 indexed registrationRoot, uint256 collateralGwei, address owner, uint256 registeredAt);
+    event OperatorRegistered(
+        bytes32 indexed registrationRoot, uint256 collateralGwei, address owner, uint256 registeredAt
+    );
 
     /// @notice Emitted when a BLS key is registered
     /// @param leafIndex The index of the BLS key in the registration merkle tree
@@ -70,9 +72,7 @@ interface IRegistry {
     /// @param challenger The address of the challenger
     /// @param owner The owner of the operator
     /// @param reg The fraudulent registration
-    event RegistrationSlashed(
-        bytes32 indexed registrationRoot, address challenger, address owner, Registration reg
-    );
+    event RegistrationSlashed(bytes32 indexed registrationRoot, address challenger, address owner, Registration reg);
 
     /// @notice Emitted when an operator is slashed for breaking a commitment
     /// @param registrationRoot The merkle root of the registration merkle tree

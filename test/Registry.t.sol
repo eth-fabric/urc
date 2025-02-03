@@ -45,12 +45,7 @@ contract RegistryTest is UnitTestHelper {
         bytes32 registrationRoot = registry.register{ value: collateral }(registrations, operator);
 
         _assertRegistration(
-            registrationRoot,
-            operator,
-            uint56(collateral / 1 gwei),
-            uint32(block.number),
-            type(uint32).max,
-            0
+            registrationRoot, operator, uint56(collateral / 1 gwei), uint32(block.number), type(uint32).max, 0
         );
 
         // Attempt duplicate registration
@@ -68,12 +63,7 @@ contract RegistryTest is UnitTestHelper {
         bytes32 registrationRoot = registry.register{ value: collateral }(registrations, operator);
 
         _assertRegistration(
-            registrationRoot,
-            operator,
-            uint56(collateral / 1 gwei),
-            uint32(block.number),
-            type(uint32).max,
-            0
+            registrationRoot, operator, uint56(collateral / 1 gwei), uint32(block.number), type(uint32).max, 0
         );
 
         // generate merkle proof
@@ -153,12 +143,7 @@ contract RegistryTest is UnitTestHelper {
         bytes32 registrationRoot = registry.register{ value: collateral }(registrations, operator);
 
         _assertRegistration(
-            registrationRoot,
-            operator,
-            uint56(collateral / 1 gwei),
-            uint32(block.number),
-            type(uint32).max,
-            0
+            registrationRoot, operator, uint56(collateral / 1 gwei), uint32(block.number), type(uint32).max, 0
         );
 
         bytes32[] memory leaves = _hashToLeaves(registrations);
@@ -191,12 +176,7 @@ contract RegistryTest is UnitTestHelper {
 
         // Verify initial registration state
         _assertRegistration(
-            registrationRoot,
-            thief,
-            uint56(collateral / 1 gwei),
-            uint32(block.number),
-            type(uint32).max,
-            0
+            registrationRoot, thief, uint56(collateral / 1 gwei), uint32(block.number), type(uint32).max, 0
         );
 
         // Create proof for operator's registration
@@ -237,12 +217,7 @@ contract RegistryTest is UnitTestHelper {
         bytes32 registrationRoot = registry.register{ value: collateral }(registrations, operator);
 
         _assertRegistration(
-            registrationRoot,
-            operator,
-            uint56(collateral / 1 gwei),
-            uint32(block.number),
-            type(uint32).max,
-            0
+            registrationRoot, operator, uint56(collateral / 1 gwei), uint32(block.number), type(uint32).max, 0
         );
 
         bytes32[] memory leaves = _hashToLeaves(registrations);
@@ -304,14 +279,7 @@ contract RegistryTest is UnitTestHelper {
             vm.startPrank(operator);
             registry.slashRegistration(registrationRoot, registrations[i], proof, i);
             _verifySlashingBalances(
-                operator,
-                thief,
-                0,
-                collateral,
-                collateral,
-                thiefBalanceBefore,
-                operatorBalanceBefore,
-                urcBalanceBefore
+                operator, thief, 0, collateral, collateral, thiefBalanceBefore, operatorBalanceBefore, urcBalanceBefore
             );
 
             _assertRegistration(registrationRoot, address(0), 0, 0, 0, 0);
@@ -332,8 +300,7 @@ contract RegistryTest is UnitTestHelper {
     function test_unregister() public {
         uint256 collateral = registry.MIN_COLLATERAL();
 
-        IRegistry.Registration[] memory registrations =
-            _setupSingleRegistration(SECRET_KEY_1, operator);
+        IRegistry.Registration[] memory registrations = _setupSingleRegistration(SECRET_KEY_1, operator);
 
         bytes32 registrationRoot = registry.register{ value: collateral }(registrations, operator);
 
@@ -350,8 +317,7 @@ contract RegistryTest is UnitTestHelper {
     function test_unregister_wrongOperator() public {
         uint256 collateral = registry.MIN_COLLATERAL();
 
-        IRegistry.Registration[] memory registrations =
-            _setupSingleRegistration(SECRET_KEY_1, operator);
+        IRegistry.Registration[] memory registrations = _setupSingleRegistration(SECRET_KEY_1, operator);
 
         bytes32 registrationRoot = registry.register{ value: collateral }(registrations, operator);
 
@@ -364,8 +330,7 @@ contract RegistryTest is UnitTestHelper {
     function test_unregister_alreadyUnregistered() public {
         uint256 collateral = registry.MIN_COLLATERAL();
 
-        IRegistry.Registration[] memory registrations =
-            _setupSingleRegistration(SECRET_KEY_1, operator);
+        IRegistry.Registration[] memory registrations = _setupSingleRegistration(SECRET_KEY_1, operator);
 
         bytes32 registrationRoot = registry.register{ value: collateral }(registrations, operator);
 
@@ -381,8 +346,7 @@ contract RegistryTest is UnitTestHelper {
     function test_claimCollateral() public {
         uint256 collateral = registry.MIN_COLLATERAL();
 
-        IRegistry.Registration[] memory registrations =
-            _setupSingleRegistration(SECRET_KEY_1, operator);
+        IRegistry.Registration[] memory registrations = _setupSingleRegistration(SECRET_KEY_1, operator);
 
         bytes32 registrationRoot = registry.register{ value: collateral }(registrations, operator);
 
@@ -409,8 +373,7 @@ contract RegistryTest is UnitTestHelper {
     function test_claimCollateral_notUnregistered() public {
         uint256 collateral = registry.MIN_COLLATERAL();
 
-        IRegistry.Registration[] memory registrations =
-            _setupSingleRegistration(SECRET_KEY_1, operator);
+        IRegistry.Registration[] memory registrations = _setupSingleRegistration(SECRET_KEY_1, operator);
 
         bytes32 registrationRoot = registry.register{ value: collateral }(registrations, operator);
 
@@ -423,8 +386,7 @@ contract RegistryTest is UnitTestHelper {
     function test_claimCollateral_delayNotMet() public {
         uint256 collateral = registry.MIN_COLLATERAL();
 
-        IRegistry.Registration[] memory registrations =
-            _setupSingleRegistration(SECRET_KEY_1, operator);
+        IRegistry.Registration[] memory registrations = _setupSingleRegistration(SECRET_KEY_1, operator);
 
         bytes32 registrationRoot = registry.register{ value: collateral }(registrations, operator);
 
@@ -442,8 +404,7 @@ contract RegistryTest is UnitTestHelper {
     function test_claimCollateral_alreadyClaimed() public {
         uint256 collateral = registry.MIN_COLLATERAL();
 
-        IRegistry.Registration[] memory registrations =
-            _setupSingleRegistration(SECRET_KEY_1, operator);
+        IRegistry.Registration[] memory registrations = _setupSingleRegistration(SECRET_KEY_1, operator);
 
         bytes32 registrationRoot = registry.register{ value: collateral }(registrations, operator);
 
@@ -465,8 +426,7 @@ contract RegistryTest is UnitTestHelper {
         uint256 collateral = registry.MIN_COLLATERAL();
         vm.assume((addAmount + collateral) / 1 gwei < uint256(2 ** 56));
 
-        IRegistry.Registration[] memory registrations =
-            _setupSingleRegistration(SECRET_KEY_1, operator);
+        IRegistry.Registration[] memory registrations = _setupSingleRegistration(SECRET_KEY_1, operator);
 
         bytes32 registrationRoot = registry.register{ value: collateral }(registrations, operator);
 
@@ -485,8 +445,7 @@ contract RegistryTest is UnitTestHelper {
     function test_addCollateral_overflow() public {
         uint256 collateral = registry.MIN_COLLATERAL();
 
-        IRegistry.Registration[] memory registrations =
-            _setupSingleRegistration(SECRET_KEY_1, operator);
+        IRegistry.Registration[] memory registrations = _setupSingleRegistration(SECRET_KEY_1, operator);
 
         bytes32 registrationRoot = registry.register{ value: collateral }(registrations, operator);
 
