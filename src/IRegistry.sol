@@ -112,6 +112,12 @@ interface IRegistry {
     /// @param optedInAt The block number when the operator opted in
     event OperatorOptedIn(bytes32 registrationRoot, address slasher, address committer, uint64 optedInAt);
 
+    /// @notice Emitted when an operator is opted out of a proposer commitment protocol
+    /// @param registrationRoot The merkle root of the registration merkle tree
+    /// @param slasher The address of the Slasher contract
+    /// @param optedOutAt The block number when the operator opted out
+    event OperatorOptedOut(bytes32 registrationRoot, address slasher, uint64 optedOutAt);
+
     /**
      *
      *                                *

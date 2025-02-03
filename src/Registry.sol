@@ -256,6 +256,32 @@ contract Registry is IRegistry {
         emit OperatorOptedIn(registrationRoot, slasher, committer, slasherCommitment.optedInAt);
     }
 
+    /// @notice Opts out of a protocol for an operator
+    /// @dev The function will revert if the operator has not registered, if the caller is not the operator's owner, or if the operator is not opted into the protocol
+    /// @param registrationRoot The merkle root generated and stored from the register() function
+    /// @param slasher The address of the Slasher contract to opt out of
+    function optOutOfSlasher(bytes32 registrationRoot, address slasher) external {
+        Operator storage operator = registrations[registrationRoot];
+
+        if (operator.owner != msg.sender) {
+            revert WrongOperator();
+        }
+
+        bytes32 slasherCommitmentId = keccak256(abi.encode(registrationRoot, slasher));
+
+        // Cache the SlasherCommitment struct
+        SlasherCommitment storage slasherCommitment = slasherCommitments[slasherCommitmentId];
+
+        // Check if already opted out or never opted in
+        if (slasherCommitment.optedOutAt >= slasherCommitment.optedInAt) {
+            revert NotOptedIn();
+        }
+
+        slasherCommitment.optedOutAt = uint64(block.number);
+
+        emit OperatorOptedOut(registrationRoot, slasher, slasherCommitment.optedOutAt);
+    }
+
     /// @notice Slashes an operator for breaking a commitment
     /// @dev The function verifies `proof` to first ensure the operator's key is in the registry, then verifies the `signedDelegation` was signed by the key. If the fraud proof window has passed, the URC will call the `slash()` function of the Slasher contract specified in the `signedDelegation`. The Slasher contract will determine if the operator has broken a commitment and return the amount of GWEI to be slashed at the URC.
     /// @dev The function will burn `slashAmountGwei` and transfer `rewardAmountGwei` to the caller. It will also save the timestamp of the slashing to start the `SLASH_WINDOW` in case of multiple slashings.
