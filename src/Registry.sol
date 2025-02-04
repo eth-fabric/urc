@@ -283,7 +283,6 @@ contract Registry is IRegistry {
             revert FraudProofWindowNotMet();
         }
 
-        // todo test operator.unregisteredAt + UNREGISTRATION_DELAY for overflow
         // Operator is not liable for slashings after unregister and the delay has passed
         if (
             operator.unregisteredAt != type(uint32).max && block.number > operator.unregisteredAt + UNREGISTRATION_DELAY
@@ -369,7 +368,6 @@ contract Registry is IRegistry {
             revert FraudProofWindowNotMet();
         }
 
-        // todo test operator.unregisteredAt + UNREGISTRATION_DELAY for overflow
         // Operator is not liable for slashings after unregister and the delay has passed
         if (
             operator.unregisteredAt != type(uint32).max && block.number > operator.unregisteredAt + UNREGISTRATION_DELAY
@@ -468,7 +466,6 @@ contract Registry is IRegistry {
             revert FraudProofWindowNotMet();
         }
 
-        // todo test operator.unregisteredAt + UNREGISTRATION_DELAY for overflow
         // Operator is not liable for slashings after unregister and the delay has passed
         if (
             operator.unregisteredAt != type(uint32).max && block.number > operator.unregisteredAt + UNREGISTRATION_DELAY
@@ -695,45 +692,6 @@ contract Registry is IRegistry {
 
         if (!BLS.verify(message, delegation.signature, delegation.delegation.proposer, DELEGATION_DOMAIN_SEPARATOR)) {
             revert DelegationSignatureInvalid();
-        }
-    }
-
-    // /// @notice Executes the slash function of the Slasher contract and returns the amount of GWEI to be slashed
-    // /// @dev The function will revert if the `slashAmountGwei` is 0, if the `slashAmountGwei` exceeds the operator's collateral, or if the Slasher.slash() function reverts.
-    // /// @param delegation The SignedDelegation signed by the operator's BLS key
-    // /// @param commitment The SignedCommitment signed by the delegate's ECDSA key
-    // /// @param evidence Arbitrary evidence to slash the operator, required by the Slasher contract
-    // /// @param collateralGwei The operator's collateral amount in GWEI
-    // /// @return slashAmountGwei The amount of GWEI to be slashed
-    // function _executeSlash(
-    //     ISlasher.Delegation calldata delegation,
-    //     ISlasher.Commitment calldata commitment,
-    //     bytes calldata evidence,
-    //     uint256 collateralGwei
-    // ) internal returns (uint256 slashAmountGwei, uint256 rewardAmountGwei) {
-    //     (slashAmountGwei, rewardAmountGwei) =
-    //         ISlasher(commitment.slasher).slash(delegation, commitment, evidence, msg.sender);
-
-    //     if (slashAmountGwei > collateralGwei) {
-    //         revert SlashAmountExceedsCollateral();
-    //     }
-    // }
-
-    /// @notice Distributes rewards to the challenger and burns the slash amount
-    /// @dev The function will revert if the transfer to the slasher fails or if the rewardAmountGwei is less than `MIN_COLLATERAL`.
-    /// @param slashAmountGwei The amount of GWEI to be burned
-    /// @param rewardAmountGwei The amount of GWEI to be transferred to the caller
-    function _executeSlashingTransfers(uint256 slashAmountGwei, uint256 rewardAmountGwei) internal {
-        // Burn the slash amount
-        (bool success,) = BURNER_ADDRESS.call{ value: slashAmountGwei * 1 gwei }("");
-        if (!success) {
-            revert EthTransferFailed();
-        }
-
-        // Transfer to the challenger
-        (success,) = msg.sender.call{ value: rewardAmountGwei * 1 gwei }("");
-        if (!success) {
-            revert EthTransferFailed();
         }
     }
 
