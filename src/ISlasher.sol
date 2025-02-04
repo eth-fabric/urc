@@ -51,11 +51,20 @@ interface ISlasher {
     /// @param evidence Arbitrary evidence for the slashing
     /// @param challenger The address of the challenger
     /// @return slashAmountGwei The amount of Gwei slashed
-    /// @return rewardAmountGwei The amount of Gwei rewarded to the caller
     function slash(
         Delegation calldata delegation,
         Commitment calldata commitment,
         bytes calldata evidence,
         address challenger
-    ) external returns (uint256 slashAmountGwei, uint256 rewardAmountGwei);
+    ) external returns (uint256 slashAmountGwei);
+
+    /// @notice Slash an operator for a given commitment
+    /// @dev The URC will call this function to slash a registered operator if supplied with a valid commitment and evidence. The assumption is that the operator has opted into the slasher protocol on-chain.
+    /// @param commitment The commitment message
+    /// @param evidence Arbitrary evidence for the slashing
+    /// @param challenger The address of the challenger
+    /// @return slashAmountGwei The amount of Gwei slashed
+    function slashFromOptIn(Commitment calldata commitment, bytes calldata evidence, address challenger)
+        external
+        returns (uint256 slashAmountGwei);
 }

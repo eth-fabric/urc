@@ -23,7 +23,6 @@ contract InclusionPreconfSlasher is ISlasher, PreconfStructs {
     using EnumerableSet for EnumerableSet.Bytes32Set;
 
     uint256 public SLASH_AMOUNT_GWEI;
-    uint256 public REWARD_AMOUNT_GWEI;
     address public constant BEACON_ROOTS_CONTRACT =
         0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02;
     uint256 public constant EIP4788_WINDOW = 8191;
@@ -36,9 +35,8 @@ contract InclusionPreconfSlasher is ISlasher, PreconfStructs {
     address public urc;
     mapping(bytes32 challengeID => Challenge challenge) public challenges;
 
-    constructor(uint256 _slashAmountGwei, uint256 _rewardAmountGwei, address _urc) {
+    constructor(uint256 _slashAmountGwei, address _urc) {
         SLASH_AMOUNT_GWEI = _slashAmountGwei;
-        REWARD_AMOUNT_GWEI = _rewardAmountGwei;
         urc = _urc;
 
         if (block.chainid == 17000) {
@@ -120,14 +118,14 @@ contract InclusionPreconfSlasher is ISlasher, PreconfStructs {
     // slash the operator for not including the transaction. Succeeds if the fraud proof window has expired (meaning no one proved the challenge was fraudulent by proving inclusion).
     // expected to be called by the URC
     // fails if the fraud proof window is active
-    // returns the slash amount and reward amount to the URC and returns the challenge bond to the challenger
+    // returns the slash amount to the URC and returns the challenge bond to the challenger
     // delegation message does not need to be checked since the challenge() and proveChallengeFraudulent() functions already cover
     function slash(
         ISlasher.Delegation calldata delegation,
         ISlasher.Commitment calldata commitment,
         bytes calldata evidence,
         address challenger
-    ) external returns (uint256 slashAmountGwei, uint256 rewardAmountGwei) {
+    ) external returns (uint256 slashAmountGwei) {
         if (msg.sender != urc) {
             revert NotURC();
         }
@@ -135,7 +133,7 @@ contract InclusionPreconfSlasher is ISlasher, PreconfStructs {
         // recover the challenge ID from the commitment
         bytes32 challengeID = keccak256(abi.encode(commitment, delegation));
 
-        // It is assumed that this is function is called from the URC.slashCommitment() function. This check ensures that only the msg.sender that originates the chain of calls is able to slash the operator and ultimately claim the reward
+        // It is assumed that this is function is called from the URC.slashCommitment() function. This check ensures that only the msg.sender that originates the chain of calls is able to slash the operator
         if (challenges[challengeID].challenger != challenger) {
             revert WrongChallengerAddress();
         }
@@ -156,7 +154,14 @@ contract InclusionPreconfSlasher is ISlasher, PreconfStructs {
 
         // Return the slash amount to the URC slasher
         slashAmountGwei = SLASH_AMOUNT_GWEI;
-        rewardAmountGwei = REWARD_AMOUNT_GWEI;
+    }
+
+    function slashFromOptIn(
+        ISlasher.Commitment calldata commitment,
+        bytes calldata evidence,
+        address challenger
+    ) external returns (uint256 slashAmountGwei) {
+        // unused in this example
     }
 
     function _verifyInclusionProof(

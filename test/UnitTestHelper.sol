@@ -23,7 +23,7 @@ contract UnitTestHelper is Test {
     /// @dev Helper to create a BLS signature for a registration
     function _registrationSignature(uint256 secretKey, address owner) internal view returns (BLS.G2Point memory) {
         bytes memory message = abi.encode(owner);
-        return BLS.sign(message, secretKey, registry.DOMAIN_SEPARATOR());
+        return BLS.sign(message, secretKey, registry.REGISTRATION_DOMAIN_SEPARATOR());
     }
 
     /// @dev Creates a Registration struct with a real BLS keypair
@@ -194,7 +194,7 @@ contract UnitTestHelper is Test {
         public
         returns (RegisterAndDelegateResult memory result, address reentrantContractAddress)
     {
-        ReentrantSlashCommitment reentrantContract = new ReentrantSlashCommitment(address(registry));
+        ReentrantSlashEquivocation reentrantContract = new ReentrantSlashEquivocation(address(registry));
 
         result.registrations = _setupSingleRegistration(SECRET_KEY_1, address(reentrantContract));
 
@@ -215,11 +215,21 @@ contract UnitTestHelper is Test {
 
         result.signedDelegation = signDelegation(params.proposerSecretKey, delegation);
 
+        // Sign a second delegation to equivocate
+        ISlasher.Delegation memory delegationTwo = ISlasher.Delegation({
+            proposer: BLS.toPublicKey(params.proposerSecretKey),
+            delegate: BLS.toPublicKey(params.delegateSecretKey),
+            committer: params.committer,
+            slot: params.slot,
+            metadata: "different metadata"
+        });
+        ISlasher.SignedDelegation memory signedDelegationTwo = signDelegation(params.proposerSecretKey, delegationTwo);
+
         ISlasher.SignedCommitment memory signedCommitment =
             basicCommitment(params.committerSecretKey, params.slasher, "");
 
         // save info for later reentrancy
-        reentrantContract.saveResult(params, result, signedCommitment);
+        reentrantContract.saveResult(params, result, signedCommitment, signedDelegationTwo);
     }
 }
 
@@ -239,6 +249,7 @@ contract ReentrantContract {
     uint16 unregistrationDelay;
 
     ISlasher.SignedCommitment signedCommitment;
+    ISlasher.SignedDelegation signedDelegationTwo;
 
     constructor(address registryAddress) {
         registry = IRegistry(registryAddress);
@@ -247,7 +258,8 @@ contract ReentrantContract {
     function saveResult(
         UnitTestHelper.RegisterAndDelegateParams memory _params,
         UnitTestHelper.RegisterAndDelegateResult memory _result,
-        ISlasher.SignedCommitment memory _signedCommitment
+        ISlasher.SignedCommitment memory _signedCommitment,
+        ISlasher.SignedDelegation memory _signedDelegationTwo
     ) public {
         params = _params;
         signedDelegation = _result.signedDelegation;
@@ -255,6 +267,7 @@ contract ReentrantContract {
             registrations[i] = _result.registrations[i];
         }
         signedCommitment = _signedCommitment;
+        signedDelegationTwo = _signedDelegationTwo;
     }
 
     function _hashToLeaves(IRegistry.Registration[] memory _registrations) internal pure returns (bytes32[] memory) {
@@ -353,13 +366,14 @@ contract ReentrantSlashableRegistrationContract is ReentrantContract {
 }
 
 /// @dev A contract that attempts to add collateral, unregister, claim collateral, and slash commitment via reentrancy
-contract ReentrantSlashCommitment is ReentrantContract {
+contract ReentrantSlashEquivocation is ReentrantContract {
     constructor(address registryAddress) ReentrantContract(registryAddress) { }
 
     receive() external payable {
         try registry.addCollateral{ value: msg.value }(registrationRoot) {
             revert("should not be able to add collateral");
         } catch (bytes memory _reason) {
+            revert("should not be able to add collateral");
             errors += 1;
         }
 
@@ -382,10 +396,10 @@ contract ReentrantSlashCommitment is ReentrantContract {
         bytes32[] memory proof; // empty for single leaf
         bytes memory evidence;
 
-        try registry.slashCommitment(
-            registrationRoot, signedDelegation.signature, proof, leafIndex, signedDelegation, signedCommitment, evidence
+        try registry.slashEquivocation(
+            registrationRoot, signedDelegation.signature, proof, leafIndex, signedDelegation, signedDelegationTwo
         ) {
-            revert("should not be able to slash commitment again");
+            revert("should not be able to slash equivocation again");
         } catch (bytes memory _reason) {
             errors += 1;
         }

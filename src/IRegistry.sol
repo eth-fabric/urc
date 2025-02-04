@@ -23,7 +23,7 @@ interface IRegistry {
 
     /// @notice An operator of BLS key[s]
     struct Operator {
-        /// The authorized addresss for the operator
+        /// The authorized address of the operator
         address owner;
         /// ETH collateral in GWEI
         uint56 collateralGwei;
@@ -39,10 +39,14 @@ interface IRegistry {
     struct SlasherCommitment {
         /// The block number when the operator opted in
         uint64 optedInAt;
-        /// The block number when the operator opted out
-        uint64 optedOutAt;
         /// The address of the key used for commitments
         address committer;
+    }
+
+    enum SlashingType {
+        Fraud,
+        Equivocation,
+        Commitment
     }
 
     /**
@@ -56,10 +60,7 @@ interface IRegistry {
     /// @param registrationRoot The merkle root of the registration merkle tree
     /// @param collateralGwei The collateral amount in GWEI
     /// @param owner The owner of the operator
-    /// @param registeredAt The block number when the operator was registered
-    event OperatorRegistered(
-        bytes32 indexed registrationRoot, uint256 collateralGwei, address owner, uint256 registeredAt
-    );
+    event OperatorRegistered(bytes32 indexed registrationRoot, uint256 collateralGwei, address owner);
 
     /// @notice Emitted when a BLS key is registered
     /// @param leafIndex The index of the BLS key in the registration merkle tree
@@ -67,27 +68,21 @@ interface IRegistry {
     /// @param leaf The leaf hash value of the `Registration`
     event KeyRegistered(uint256 leafIndex, Registration reg, bytes32 leaf);
 
-    /// @notice Emitted when an operator is slashed for a fraudulent registration
+    /// @notice Emitted when an operator is slashed for fraud, equivocation, or breaking a commitment
     /// @param registrationRoot The merkle root of the registration merkle tree
-    /// @param challenger The address of the challenger
     /// @param owner The owner of the operator
-    /// @param reg The fraudulent registration
-    event RegistrationSlashed(bytes32 indexed registrationRoot, address challenger, address owner, Registration reg);
-
-    /// @notice Emitted when an operator is slashed for breaking a commitment
-    /// @param registrationRoot The merkle root of the registration merkle tree
+    /// @param challenger The address of the challenger
+    /// @param slashingType The type of slashing
+    /// @param slasher The address of the slasher
     /// @param slashAmountGwei The amount of GWEI slashed
-    /// @param rewardAmountGwei The amount of GWEI rewarded to the caller
-    /// @param pubkey The BLS public key
     event OperatorSlashed(
-        bytes32 indexed registrationRoot, uint256 slashAmountGwei, uint256 rewardAmountGwei, BLS.G1Point pubkey
+        SlashingType slashingType,
+        bytes32 indexed registrationRoot,
+        address owner,
+        address challenger,
+        address indexed slasher,
+        uint256 slashAmountGwei
     );
-
-    /// @notice Emitted when an operator is slashed for equivocation
-    /// @param registrationRoot The merkle root of the registration merkle tree
-    /// @param rewardAmountGwei The amount of GWEI rewarded to the caller
-    /// @param pubkey The BLS public key
-    event OperatorEquivocated(bytes32 indexed registrationRoot, uint256 rewardAmountGwei, BLS.G1Point pubkey);
 
     /// @notice Emitted when an operator is unregistered
     /// @param registrationRoot The merkle root of the registration merkle tree
@@ -108,14 +103,12 @@ interface IRegistry {
     /// @param registrationRoot The merkle root of the registration merkle tree
     /// @param slasher The address of the Slasher contract
     /// @param committer The address of the key used for commitments
-    /// @param optedInAt The block number when the operator opted in
-    event OperatorOptedIn(bytes32 indexed registrationRoot, address slasher, address committer, uint64 optedInAt);
+    event OperatorOptedIn(bytes32 indexed registrationRoot, address indexed slasher, address indexed committer);
 
     /// @notice Emitted when an operator is opted out of a proposer commitment protocol
     /// @param registrationRoot The merkle root of the registration merkle tree
     /// @param slasher The address of the Slasher contract
-    /// @param optedOutAt The block number when the operator opted out
-    event OperatorOptedOut(bytes32 indexed registrationRoot, address slasher, uint64 optedOutAt);
+    event OperatorOptedOut(bytes32 indexed registrationRoot, address indexed slasher);
 
     /**
      *
@@ -154,6 +147,7 @@ interface IRegistry {
     error AlreadyOptedIn();
     error NotOptedIn();
     error OptInDelayNotMet();
+
     /**
      *
      *                                *
@@ -161,7 +155,6 @@ interface IRegistry {
      *                                *
      *
      */
-
     function register(Registration[] calldata registrations, address owner)
         external
         payable
@@ -193,7 +186,7 @@ interface IRegistry {
         ISlasher.SignedDelegation calldata delegation,
         ISlasher.SignedCommitment calldata commitment,
         bytes calldata evidence
-    ) external returns (uint256 slashAmountGwei, uint256 rewardAmountGwei);
+    ) external returns (uint256 slashAmountGwei);
 
     function slashEquivocation(
         bytes32 registrationRoot,
@@ -202,5 +195,12 @@ interface IRegistry {
         uint256 leafIndex,
         ISlasher.SignedDelegation calldata delegationOne,
         ISlasher.SignedDelegation calldata delegationTwo
-    ) external;
+    ) external returns (uint256 slashAmountGwei);
+
+    function slashCommitmentFromOptIn(
+        bytes32 registrationRoot,
+        address slasher,
+        ISlasher.SignedCommitment calldata commitment,
+        bytes calldata evidence
+    ) external returns (uint256 slashAmountGwei);
 }

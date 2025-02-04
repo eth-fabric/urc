@@ -27,7 +27,7 @@ contract Registry is IRegistry {
     uint32 public constant SLASH_WINDOW = 7200; // 1 day
     uint32 public constant OPT_IN_DELAY = 7200; // 1 day
     address internal constant BURNER_ADDRESS = address(0x0000000000000000000000000000000000000000);
-    bytes public constant DOMAIN_SEPARATOR = "0x00435255"; // "URC" in little endian
+    bytes public constant REGISTRATION_DOMAIN_SEPARATOR = "0x00435255"; // "URC" in little endian
     bytes public constant DELEGATION_DOMAIN_SEPARATOR = "0x0044656c"; // "Del" in little endian
 
     /**
@@ -39,7 +39,10 @@ contract Registry is IRegistry {
     /// @notice Batch registers an operator's BLS keys and collateral to the URC
     /// @dev Registration signatures are optimistically verified. They are expected to be signed with the `DOMAIN_SEPARATOR` mixin.
     /// @dev The function will merkleize the supplied `regs` and map the registration root to an Operator struct.
-    /// @dev The function will revert if the operator has already registered the same `regs`, if they sent less than `MIN_COLLATERAL`, if the unregistration delay is less than `MIN_UNREGISTRATION_DELAY`, or if the registration root is invalid.
+    /// @dev The function will revert if:
+    /// @dev - They sent less than `MIN_COLLATERAL` (InsufficientCollateral)
+    /// @dev - The operator has already registered the same `regs` (OperatorAlreadyRegistered)
+    /// @dev - The registration root is invalid (InvalidRegistrationRoot)
     /// @param regs The BLS keys to register
     /// @param owner The authorized address to perform actions on behalf of the operator
     /// @return registrationRoot The merkle root of the registration
@@ -48,20 +51,24 @@ contract Registry is IRegistry {
         payable
         returns (bytes32 registrationRoot)
     {
+        // At least MIN_COLLATERAL for sufficient reward for fraud/equivocation challenges
         if (msg.value < MIN_COLLATERAL) {
             revert InsufficientCollateral();
         }
 
+        // Construct tree root from registrations
         registrationRoot = _merkleizeRegistrations(regs);
 
         if (registrationRoot == bytes32(0)) {
             revert InvalidRegistrationRoot();
         }
 
+        // Prevent duplicates from overwriting previous registrations
         if (registrations[registrationRoot].registeredAt != 0) {
             revert OperatorAlreadyRegistered();
         }
 
+        // Each Operator is mapped to a unique registration root
         registrations[registrationRoot] = Operator({
             owner: owner,
             collateralGwei: uint56(msg.value / 1 gwei),
@@ -70,32 +77,39 @@ contract Registry is IRegistry {
             slashedAt: 0
         });
 
-        emit OperatorRegistered(registrationRoot, uint56(msg.value / 1 gwei), owner, block.number);
+        emit OperatorRegistered(registrationRoot, uint56(msg.value / 1 gwei), owner);
     }
 
     /// @notice Starts the process to unregister an operator from the URC
-    /// @dev The function will revert if the operator has already unregistered, if the operator has not registered, or if the caller is not the operator's withdrawal address.
     /// @dev The function will mark the `unregisteredAt` timestamp in the Operator struct. The operator can claim their collateral after the `unregistrationDelay` more blocks have passed.
+    /// @dev The function will revert if:
+    /// @dev - The operator has already unregistered (AlreadyUnregistered)
+    /// @dev - The operator has not registered (NotRegisteredKey)
+    /// @dev - The caller is not the operator's withdrawal address (WrongOperator)
     /// @param registrationRoot The merkle root generated and stored from the register() function
     function unregister(bytes32 registrationRoot) external {
         Operator storage operator = registrations[registrationRoot];
 
+        // Only the authorized owner can unregister
         if (operator.owner != msg.sender) {
             revert WrongOperator();
         }
 
-        // Check that they haven't already unregistered
+        // Prevent double unregistrations
         if (operator.unregisteredAt != type(uint32).max) {
             revert AlreadyUnregistered();
         }
 
-        // Set unregistration timestamp
+        // Save the block number; they must wait for the unregistration delay to claim collateral
         operator.unregisteredAt = uint32(block.number);
 
         emit OperatorUnregistered(registrationRoot, operator.unregisteredAt);
     }
+
     /// @notice Opts an operator into a proposer commtiment protocol via Slasher contract
-    /// @dev The function will revert if the operator has not registered or if the caller is not the operator's owner
+    /// @dev The function will revert if:
+    /// @dev - The operator has not registered (NotRegisteredKey)
+    /// @dev - The caller is not the operator's owner (WrongOperator)
     /// @param registrationRoot The merkle root generated and stored from the register() function
     /// @param slasher The address of the Slasher contract to opt into
     /// @param committer The address of the key used for commitments
@@ -103,57 +117,54 @@ contract Registry is IRegistry {
     function optInToSlasher(bytes32 registrationRoot, address slasher, address committer) external {
         Operator storage operator = registrations[registrationRoot];
 
+        // Only the authorized owner can opt in
         if (operator.owner != msg.sender) {
             revert WrongOperator();
         }
 
-        // Create a unique identifier for the slasher commitment
-        bytes32 slasherCommitmentId = keccak256(abi.encode(registrationRoot, slasher));
+        // Retrieve the SlasherCommitment struct
+        SlasherCommitment storage slasherCommitment =
+            slasherCommitments[keccak256(abi.encode(registrationRoot, slasher))];
 
-        // Cache the SlasherCommitment struct
-        SlasherCommitment storage slasherCommitment = slasherCommitments[slasherCommitmentId];
-
-        // Check if already opted in
-        if (slasherCommitment.optedOutAt < slasherCommitment.optedInAt) {
+        // Prevent double opt-ins
+        if (slasherCommitment.optedInAt != 0) {
             revert AlreadyOptedIn();
         }
 
-        // If previously opted out, enforce a delay before allowing new opt-in
-        if (slasherCommitment.optedOutAt != 0 && block.timestamp < slasherCommitment.optedOutAt + OPT_IN_DELAY) {
-            revert OptInDelayNotMet();
-        }
-
+        // Save the block number and committer
         slasherCommitment.optedInAt = uint64(block.number);
-        slasherCommitment.optedOutAt = 0;
         slasherCommitment.committer = committer;
 
-        emit OperatorOptedIn(registrationRoot, slasher, committer, slasherCommitment.optedInAt);
+        emit OperatorOptedIn(registrationRoot, slasher, committer);
     }
 
     /// @notice Opts out of a protocol for an operator
-    /// @dev The function will revert if the operator has not registered, if the caller is not the operator's owner, or if the operator is not opted into the protocol
+    /// @dev The function will revert if:
+    /// @dev - The caller is not the operator's owner (WrongOperator)
+    /// @dev - The opt-in delay has not passed (OptInDelayNotMet)
     /// @param registrationRoot The merkle root generated and stored from the register() function
     /// @param slasher The address of the Slasher contract to opt out of
     function optOutOfSlasher(bytes32 registrationRoot, address slasher) external {
         Operator storage operator = registrations[registrationRoot];
 
+        // Only the authorized owner can opt out
         if (operator.owner != msg.sender) {
             revert WrongOperator();
         }
 
+        // Retrieve the SlasherCommitment struct
         bytes32 slasherCommitmentId = keccak256(abi.encode(registrationRoot, slasher));
-
-        // Cache the SlasherCommitment struct
         SlasherCommitment storage slasherCommitment = slasherCommitments[slasherCommitmentId];
 
-        // Check if already opted out or never opted in
-        if (slasherCommitment.optedOutAt >= slasherCommitment.optedInAt) {
-            revert NotOptedIn();
+        // Enforce a delay before allowing opt-out
+        if (block.number < slasherCommitment.optedInAt + OPT_IN_DELAY) {
+            revert OptInDelayNotMet();
         }
 
-        slasherCommitment.optedOutAt = uint64(block.number);
+        // Delete the entry
+        delete slasherCommitments[slasherCommitmentId];
 
-        emit OperatorOptedOut(registrationRoot, slasher, slasherCommitment.optedOutAt);
+        emit OperatorOptedOut(registrationRoot, slasher);
     }
 
     /**
@@ -165,7 +176,12 @@ contract Registry is IRegistry {
     /// @notice Slash an operator for submitting a fraudulent `Registration` in the register() function
     /// @dev To save BLS verification gas costs, the URC optimistically accepts registration signatures. This function allows a challenger to slash the operator by executing the BLS verification to prove the registration is fraudulent.
     /// @dev The function will delete the operator's registration, transfer `MIN_COLLATERAL` to the caller, and return any remaining funds to the operator's withdrawal address.
-    /// @dev The function will revert if the operator has already unregistered, if the operator has not registered, if the fraud proof window has expired, or if the proof is invalid.
+    /// @dev The function will revert if:
+    /// @dev - The operator has already unregistered (AlreadyUnregistered)
+    /// @dev - The operator has not registered (NotRegisteredKey)
+    /// @dev - The fraud proof window has expired (FraudProofWindowExpired)
+    /// @dev - The proof is invalid (FraudProofChallengeInvalid)
+    /// @dev - ETH transfer to challenger or owner fails (EthTransferFailed)
     /// @param registrationRoot The merkle root generated and stored from the register() function
     /// @param reg The fraudulent Registration
     /// @param proof The merkle proof to verify the operator's key is in the registry
@@ -178,30 +194,33 @@ contract Registry is IRegistry {
         uint256 leafIndex
     ) external returns (uint256 slashedCollateralWei) {
         Operator storage operator = registrations[registrationRoot];
-        address operatorOwner = operator.owner;
+        address owner = operator.owner;
 
+        // Can only slash registrations within the fraud proof window
         if (block.number > operator.registeredAt + FRAUD_PROOF_WINDOW) {
             revert FraudProofWindowExpired();
         }
 
+        // Verify the registration is part of the registry
         uint256 collateralGwei = _verifyMerkleProof(registrationRoot, keccak256(abi.encode(reg)), proof, leafIndex);
 
+        // 0 collateral implies the registration was not part of the registry
         if (collateralGwei == 0) {
             revert NotRegisteredKey();
         }
 
         // Reconstruct registration message
-        bytes memory message = abi.encode(operatorOwner);
+        bytes memory message = abi.encode(owner);
 
-        // Verify registration signature
-        if (BLS.verify(message, reg.signature, reg.pubkey, DOMAIN_SEPARATOR)) {
+        // Verify registration signature, note the domain separator mixin
+        if (BLS.verify(message, reg.signature, reg.pubkey, REGISTRATION_DOMAIN_SEPARATOR)) {
             revert FraudProofChallengeInvalid();
         }
 
-        // Delete the operator
+        // Delete the operator, they must re-register to continue
         delete registrations[registrationRoot];
 
-        // Calculate the amount to transfer to challenger and return to operator
+        // Calculate the amount to transfer to challenger and return to owner
         uint256 remainingWei = uint256(collateralGwei) * 1 gwei - MIN_COLLATERAL;
 
         // Transfer to the challenger
@@ -210,21 +229,29 @@ contract Registry is IRegistry {
             revert EthTransferFailed();
         }
 
-        // Return any remaining funds to Operator
-        (success,) = operatorOwner.call{ value: remainingWei }("");
+        // Return any remaining funds to owner
+        (success,) = owner.call{ value: remainingWei }("");
         if (!success) {
             revert EthTransferFailed();
         }
 
-        emit RegistrationSlashed(registrationRoot, msg.sender, operatorOwner, reg);
+        emit OperatorSlashed(SlashingType.Fraud, registrationRoot, owner, msg.sender, address(this), MIN_COLLATERAL);
 
+        // Return a value for the caller to use
         return MIN_COLLATERAL;
     }
 
     /// @notice Slashes an operator for breaking a commitment
-    /// @dev The function verifies `proof` to first ensure the operator's key is in the registry, then verifies the `signedDelegation` was signed by the key. If the fraud proof window has passed, the URC will call the `slash()` function of the Slasher contract specified in the `signedDelegation`. The Slasher contract will determine if the operator has broken a commitment and return the amount of GWEI to be slashed at the URC.
-    /// @dev The function will burn `slashAmountGwei` and transfer `rewardAmountGwei` to the caller. It will also save the timestamp of the slashing to start the `SLASH_WINDOW` in case of multiple slashings.
-    /// @dev The function will revert if the operator has not registered, if the fraud proof window has not passed, if the operator has already unregistered, if the proof is invalid, or if the slash window has expired.
+    /// @dev The function verifies `proof` to first ensure the operator's BLS key is in the registry, then verifies the `signedDelegation` was signed by the same key. If the fraud proof window has passed, the URC will call the `slash()` function of the Slasher contract specified in the `signedCommitment`. The Slasher contract will determine if the operator has broken a commitment and return the amount of GWEI to be slashed at the URC.
+    /// @dev The function will burn `slashAmountGwei`. It will also save the timestamp of the slashing to start the `SLASH_WINDOW` in case of multiple slashings.
+    /// @dev The function will revert if:
+    /// @dev - The same slashing inputs have been supplied before (SlashingAlreadyOccurred)
+    /// @dev - The fraud proof window has not passed (FraudProofWindowNotMet)
+    /// @dev - The operator has already unregistered (OperatorAlreadyUnregistered)
+    /// @dev - The slash window has expired (SlashWindowExpired)
+    /// @dev - The proof is invalid (NotRegisteredKey)
+    /// @dev - The signed commitment was not signed by the delegated committer (DelegationSignatureInvalid)
+    /// @dev - The slash amount exceeds the operator's collateral (SlashAmountExceedsCollateral)
     /// @param registrationRoot The merkle root generated and stored from the register() function
     /// @param registrationSignature The signature from the operator's previously registered `Registration`
     /// @param proof The merkle proof to verify the operator's key is in the registry
@@ -233,7 +260,6 @@ contract Registry is IRegistry {
     /// @param commitment The SignedCommitment signed by the delegate's ECDSA key
     /// @param evidence Arbitrary evidence to slash the operator, required by the Slasher contract
     /// @return slashAmountGwei The amount of GWEI slashed
-    /// @return rewardAmountGwei The amount of GWEI rewarded to the caller
     function slashCommitment(
         bytes32 registrationRoot,
         BLS.G2Point calldata registrationSignature,
@@ -242,61 +268,165 @@ contract Registry is IRegistry {
         ISlasher.SignedDelegation calldata delegation,
         ISlasher.SignedCommitment calldata commitment,
         bytes calldata evidence
-    ) external returns (uint256 slashAmountGwei, uint256 rewardAmountGwei) {
+    ) external returns (uint256 slashAmountGwei) {
         Operator storage operator = registrations[registrationRoot];
 
         bytes32 slashingDigest = keccak256(abi.encode(delegation, commitment, registrationRoot));
 
+        // Prevent slashing with same inputs
         if (slashedBefore[slashingDigest]) {
             revert SlashingAlreadyOccurred();
         }
 
+        // Operator is not liable for slashings before the fraud proof window elapses
         if (block.number < operator.registeredAt + FRAUD_PROOF_WINDOW) {
             revert FraudProofWindowNotMet();
         }
 
+        // todo test operator.unregisteredAt + UNREGISTRATION_DELAY for overflow
+        // Operator is not liable for slashings after unregister and the delay has passed
         if (
             operator.unregisteredAt != type(uint32).max && block.number > operator.unregisteredAt + UNREGISTRATION_DELAY
         ) {
             revert OperatorAlreadyUnregistered();
         }
 
+        // Slashing can only occur within the slash window after the first reported slashing
+        // After the slash window has passed, the operator can claim collateral
         if (operator.slashedAt != 0 && block.number > operator.slashedAt + SLASH_WINDOW) {
             revert SlashWindowExpired();
         }
 
+        // Verify the delegation was signed by the operator's BLS key
+        // This is a sanity check to ensure the delegation is valid
         uint256 collateralGwei =
             _verifyDelegation(registrationRoot, registrationSignature, proof, leafIndex, delegation);
 
         // Verify the commitment was signed by the commitment key from the Delegation
         address committer = ECDSA.recover(keccak256(abi.encode(commitment.commitment)), commitment.signature);
-
         if (committer != delegation.delegation.committer) {
             revert UnauthorizedCommitment();
         }
 
-        (slashAmountGwei, rewardAmountGwei) =
-            _executeSlash(delegation.delegation, commitment.commitment, evidence, collateralGwei);
+        // Call the Slasher contract to slash the operator
+        slashAmountGwei = ISlasher(commitment.commitment.slasher).slash(
+            delegation.delegation, commitment.commitment, evidence, msg.sender
+        );
 
-        // Reward challenger + burn Ether
-        _executeSlashingTransfers(slashAmountGwei, rewardAmountGwei);
+        // Prevent slashing more than the operator's collateral
+        if (slashAmountGwei > operator.collateralGwei) {
+            revert SlashAmountExceedsCollateral();
+        }
 
-        // Save timestamp only once
+        // Burn the slashed amount
+        _burnGwei(slashAmountGwei);
+
+        // Save timestamp only once to start the slash window
         if (operator.slashedAt == 0) {
             operator.slashedAt = uint32(block.number);
         }
 
         // Decrement operator's collateral
-        operator.collateralGwei -= uint56(slashAmountGwei + rewardAmountGwei);
+        operator.collateralGwei -= uint56(slashAmountGwei);
 
         // Prevent same slashing from occurring again
         slashedBefore[slashingDigest] = true;
 
-        emit OperatorSlashed(registrationRoot, slashAmountGwei, rewardAmountGwei, delegation.delegation.proposer);
+        emit OperatorSlashed(
+            SlashingType.Commitment,
+            registrationRoot,
+            operator.owner,
+            msg.sender,
+            commitment.commitment.slasher,
+            slashAmountGwei
+        );
+    }
+
+    /// @notice Slashes an operator for breaking a commitment in a protocol they opted into via the optInToSlasher() function. The operator must have already opted into the protocol.
+    /// @dev The function verifies the commitment was signed by the registered committer from the optInToSlasher() function before calling into the Slasher contract.
+    /// @dev Reverts if:
+    /// @dev - The fraud proof window has not passed (FraudProofWindowNotMet)
+    /// @dev - The operator has already unregistered and delay passed (OperatorAlreadyUnregistered)
+    /// @dev - The slash window has expired (SlashWindowExpired)
+    /// @dev - The operator has not opted into the slasher (NotOptedIn)
+    /// @dev - The commitment was not signed by registered committer (UnauthorizedCommitment)
+    /// @dev - The slash amount exceeds operator's collateral (SlashAmountExceedsCollateral)
+    /// @param registrationRoot The merkle root generated and stored from the register() function
+    /// @param slasher The address of the Slasher contract
+    /// @param commitment The SignedCommitment signed by the delegate's ECDSA key
+    /// @param evidence Arbitrary evidence to slash the operator, required by the Slasher contract
+    function slashCommitmentFromOptIn(
+        bytes32 registrationRoot,
+        address slasher,
+        ISlasher.SignedCommitment calldata commitment,
+        bytes calldata evidence
+    ) external returns (uint256 slashAmountGwei) {
+        Operator storage operator = registrations[registrationRoot];
+        address owner = operator.owner;
+
+        // Operator is not liable for slashings before the fraud proof window elapses
+        if (block.number < operator.registeredAt + FRAUD_PROOF_WINDOW) {
+            revert FraudProofWindowNotMet();
+        }
+
+        // todo test operator.unregisteredAt + UNREGISTRATION_DELAY for overflow
+        // Operator is not liable for slashings after unregister and the delay has passed
+        if (
+            operator.unregisteredAt != type(uint32).max && block.number > operator.unregisteredAt + UNREGISTRATION_DELAY
+        ) {
+            revert OperatorAlreadyUnregistered();
+        }
+
+        // Slashing can only occur within the slash window after the first reported slashing
+        // After the slash window has passed, the operator can claim collateral
+        if (operator.slashedAt != 0 && block.number > operator.slashedAt + SLASH_WINDOW) {
+            revert SlashWindowExpired();
+        }
+
+        // Recover the SlasherCommitment entry
+        bytes32 slasherCommitmentId = keccak256(abi.encode(registrationRoot, slasher));
+        SlasherCommitment storage slasherCommitment = slasherCommitments[slasherCommitmentId];
+
+        // Verify the operator is opted into protocol
+        if (slasherCommitment.optedInAt == 0) {
+            revert NotOptedIn();
+        }
+
+        // Verify the commitment was signed by the registered committer from the optInToSlasher() function
+        address committer = ECDSA.recover(keccak256(abi.encode(commitment.commitment)), commitment.signature);
+        if (committer != slasherCommitment.committer) {
+            revert UnauthorizedCommitment();
+        }
+
+        // Call the Slasher contract to slash the operator
+        slashAmountGwei = ISlasher(slasher).slashFromOptIn(commitment.commitment, evidence, msg.sender);
+
+        // Prevent slashing more than the operator's collateral
+        if (slashAmountGwei > operator.collateralGwei) {
+            revert SlashAmountExceedsCollateral();
+        }
+
+        // Save timestamp only once to start the slash window
+        if (operator.slashedAt == 0) {
+            operator.slashedAt = uint32(block.number);
+        }
+
+        // Decrement operator's collateral
+        operator.collateralGwei -= uint56(slashAmountGwei);
+
+        // Prevent same slashing from occurring again
+        delete slasherCommitments[slasherCommitmentId];
+
+        emit OperatorSlashed(
+            SlashingType.Commitment, registrationRoot, operator.owner, msg.sender, slasher, slashAmountGwei
+        );
+
+        // Burn the slashed amount
+        _burnGwei(slashAmountGwei);
     }
 
     /// @notice Slash an operator for equivocation (signing two different delegations for the same slot)
-    /// @dev The function will slash the operator's collateral and transfer `MIN_COLLATERAL` to the caller
+    /// @dev The function will slash the operator's collateral and transfer `MIN_COLLATERAL` to the msg.sender.
     /// @param registrationRoot The merkle root generated and stored from the register() function
     /// @param registrationSignature The signature from the operator's previously registered `Registration`
     /// @param proof The merkle proof to verify the operator's key is in the registry
@@ -318,69 +448,79 @@ contract Registry is IRegistry {
         uint256 leafIndex,
         ISlasher.SignedDelegation calldata delegationOne,
         ISlasher.SignedDelegation calldata delegationTwo
-    ) external {
+    ) external returns (uint256 slashAmountGwei) {
         Operator storage operator = registrations[registrationRoot];
 
         bytes32 slashingDigest = keccak256(abi.encode(delegationOne, delegationTwo, registrationRoot));
 
-        // verify the delegations are not the same
+        // Verify the delegations are not identical
         if (keccak256(abi.encode(delegationOne)) == keccak256(abi.encode(delegationTwo))) {
             revert DelegationsAreSame();
         }
 
+        // Prevent duplicate slashing with same inputs
         if (slashedBefore[slashingDigest]) {
             revert SlashingAlreadyOccurred();
         }
 
+        // Operator is not liable for slashings before the fraud proof window elapses
         if (block.number < operator.registeredAt + FRAUD_PROOF_WINDOW) {
             revert FraudProofWindowNotMet();
         }
 
+        // todo test operator.unregisteredAt + UNREGISTRATION_DELAY for overflow
+        // Operator is not liable for slashings after unregister and the delay has passed
         if (
             operator.unregisteredAt != type(uint32).max && block.number > operator.unregisteredAt + UNREGISTRATION_DELAY
         ) {
             revert OperatorAlreadyUnregistered();
         }
 
+        // Slashing can only occur within the slash window after the first reported slashing
+        // After the slash window has passed, the operator can claim collateral
         if (operator.slashedAt != 0 && block.number > operator.slashedAt + SLASH_WINDOW) {
             revert SlashWindowExpired();
         }
 
-        // verify both delegations
-        uint256 collateralGweiOne =
-            _verifyDelegation(registrationRoot, registrationSignature, proof, leafIndex, delegationOne);
-        uint256 collateralGweiTwo =
-            _verifyDelegation(registrationRoot, registrationSignature, proof, leafIndex, delegationTwo);
-
+        // Verify both delegations were signed by the operator's BLS key
+        if (_verifyDelegation(registrationRoot, registrationSignature, proof, leafIndex, delegationOne) == 0) {
+            revert InvalidDelegation();
+        }
         // error if either delegation is invalid
-        if (collateralGweiOne == 0 || collateralGweiTwo == 0) {
+        if (_verifyDelegation(registrationRoot, registrationSignature, proof, leafIndex, delegationTwo) == 0) {
             revert InvalidDelegation();
         }
 
-        // error if the delegations are for different slots
+        // Verify the delegations are for the same slot
         if (delegationOne.delegation.slot != delegationTwo.delegation.slot) {
             revert DifferentSlots();
         }
 
-        // Save timestamp only once
+        // Save timestamp only once to start the slash window
         if (operator.slashedAt == 0) {
             operator.slashedAt = uint32(block.number);
         }
 
-        // Decrement operator's collateral
-        operator.collateralGwei -= uint56(MIN_COLLATERAL / 1 gwei);
+        slashAmountGwei = MIN_COLLATERAL / 1 gwei;
 
-        // Save both permutations of the slashing digest
+        // Decrement operator's collateral
+        operator.collateralGwei -= uint56(slashAmountGwei);
+
+        // Prevent same slashing from occurring again
         slashedBefore[slashingDigest] = true;
+
+        // Save the perumutation to prevent duplicate slashings with the same pair of Delegations
         slashedBefore[keccak256(abi.encode(delegationTwo, delegationOne, registrationRoot))] = true;
 
-        // reward the challenger
+        // Reward the challenger
         (bool success,) = msg.sender.call{ value: MIN_COLLATERAL }("");
         if (!success) {
             revert EthTransferFailed();
         }
 
-        emit OperatorEquivocated(registrationRoot, MIN_COLLATERAL, delegationOne.delegation.proposer);
+        emit OperatorSlashed(
+            SlashingType.Equivocation, registrationRoot, operator.owner, msg.sender, address(this), slashAmountGwei
+        );
     }
 
     /**
@@ -430,13 +570,11 @@ contract Registry is IRegistry {
             revert NoCollateralToClaim();
         }
 
-        uint256 amountToReturn = collateralGwei * 1 gwei;
-
         // Clear operator info
         delete registrations[registrationRoot];
 
         // Transfer to operator
-        (bool success,) = operatorOwner.call{ value: amountToReturn }("");
+        (bool success,) = operatorOwner.call{ value: collateralGwei * 1 gwei }("");
         if (!success) {
             revert EthTransferFailed();
         }
@@ -446,7 +584,7 @@ contract Registry is IRegistry {
 
     function claimSlashedCollateral(bytes32 registrationRoot) external {
         Operator storage operator = registrations[registrationRoot];
-        address operatorOwner = operator.owner;
+        address owner = operator.owner;
         uint256 collateralGwei = operator.collateralGwei;
 
         // Check that they've been slashed
@@ -459,13 +597,11 @@ contract Registry is IRegistry {
             revert SlashWindowNotMet();
         }
 
-        uint256 amountToReturn = collateralGwei * 1 gwei;
-
-        // Clear operator info
+        // Delete the operator
         delete registrations[registrationRoot];
 
-        // Transfer to operator
-        (bool success,) = operatorOwner.call{ value: amountToReturn }("");
+        // Transfer collateral to owner
+        (bool success,) = owner.call{ value: collateralGwei * 1 gwei }("");
         if (!success) {
             revert EthTransferFailed();
         }
@@ -562,26 +698,26 @@ contract Registry is IRegistry {
         }
     }
 
-    /// @notice Executes the slash function of the Slasher contract and returns the amount of GWEI to be slashed
-    /// @dev The function will revert if the `slashAmountGwei` is 0, if the `slashAmountGwei` exceeds the operator's collateral, or if the Slasher.slash() function reverts.
-    /// @param delegation The SignedDelegation signed by the operator's BLS key
-    /// @param commitment The SignedCommitment signed by the delegate's ECDSA key
-    /// @param evidence Arbitrary evidence to slash the operator, required by the Slasher contract
-    /// @param collateralGwei The operator's collateral amount in GWEI
-    /// @return slashAmountGwei The amount of GWEI to be slashed
-    function _executeSlash(
-        ISlasher.Delegation calldata delegation,
-        ISlasher.Commitment calldata commitment,
-        bytes calldata evidence,
-        uint256 collateralGwei
-    ) internal returns (uint256 slashAmountGwei, uint256 rewardAmountGwei) {
-        (slashAmountGwei, rewardAmountGwei) =
-            ISlasher(commitment.slasher).slash(delegation, commitment, evidence, msg.sender);
+    // /// @notice Executes the slash function of the Slasher contract and returns the amount of GWEI to be slashed
+    // /// @dev The function will revert if the `slashAmountGwei` is 0, if the `slashAmountGwei` exceeds the operator's collateral, or if the Slasher.slash() function reverts.
+    // /// @param delegation The SignedDelegation signed by the operator's BLS key
+    // /// @param commitment The SignedCommitment signed by the delegate's ECDSA key
+    // /// @param evidence Arbitrary evidence to slash the operator, required by the Slasher contract
+    // /// @param collateralGwei The operator's collateral amount in GWEI
+    // /// @return slashAmountGwei The amount of GWEI to be slashed
+    // function _executeSlash(
+    //     ISlasher.Delegation calldata delegation,
+    //     ISlasher.Commitment calldata commitment,
+    //     bytes calldata evidence,
+    //     uint256 collateralGwei
+    // ) internal returns (uint256 slashAmountGwei, uint256 rewardAmountGwei) {
+    //     (slashAmountGwei, rewardAmountGwei) =
+    //         ISlasher(commitment.slasher).slash(delegation, commitment, evidence, msg.sender);
 
-        if (slashAmountGwei > collateralGwei) {
-            revert SlashAmountExceedsCollateral();
-        }
-    }
+    //     if (slashAmountGwei > collateralGwei) {
+    //         revert SlashAmountExceedsCollateral();
+    //     }
+    // }
 
     /// @notice Distributes rewards to the challenger and burns the slash amount
     /// @dev The function will revert if the transfer to the slasher fails or if the rewardAmountGwei is less than `MIN_COLLATERAL`.
@@ -596,6 +732,17 @@ contract Registry is IRegistry {
 
         // Transfer to the challenger
         (success,) = msg.sender.call{ value: rewardAmountGwei * 1 gwei }("");
+        if (!success) {
+            revert EthTransferFailed();
+        }
+    }
+
+    /// @notice Burns ether
+    /// @dev The function will revert if the transfer to the BURNER_ADDRESS fails.
+    /// @param amountGwei The amount of GWEI to be burned
+    function _burnGwei(uint256 amountGwei) internal {
+        // Burn the slash amount
+        (bool success,) = BURNER_ADDRESS.call{ value: amountGwei * 1 gwei }("");
         if (!success) {
             revert EthTransferFailed();
         }

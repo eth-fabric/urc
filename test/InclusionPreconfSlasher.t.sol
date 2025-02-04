@@ -32,7 +32,6 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
     InclusionPreconfSlasher slasher;
     BLS.G1Point delegatePubKey;
     uint256 slashAmountGwei = 1 ether / 1 gwei; // slash 1 ether
-    uint256 rewardAmountGwei = 0.1 ether / 1 gwei; // reward 0.1 ether
     uint256 collateral = 1.1 ether;
     uint256 committerSecretKey;
     address committer;
@@ -40,7 +39,7 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
     function setUp() public {
         vm.createSelectFork(vm.rpcUrl("mainnet"));
         registry = new Registry();
-        slasher = new InclusionPreconfSlasher(slashAmountGwei, rewardAmountGwei, address(registry));
+        slasher = new InclusionPreconfSlasher(slashAmountGwei, address(registry));
         delegatePubKey = BLS.toPublicKey(SECRET_KEY_2);
         (committer, committerSecretKey) = makeAddrAndKey("commitmentsKey");
         vm.deal(challenger, 100 ether);
@@ -250,7 +249,7 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
         );
 
         _verifySlashCommitmentBalances(
-            challenger, slashAmountGwei * 1 gwei, rewardAmountGwei * 1 gwei, challengerBalanceBefore, urcBalanceBefore
+            challenger, slashAmountGwei * 1 gwei, 0, challengerBalanceBefore, urcBalanceBefore
         );
 
         // Retrieve operator data
@@ -260,11 +259,7 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
         assertEq(operatorData.slashedAt, block.number, "slashedAt not set");
 
         // Verify operator's collateralGwei is decremented
-        assertEq(
-            operatorData.collateralGwei,
-            collateral / 1 gwei - slashAmountGwei - rewardAmountGwei,
-            "collateralGwei not decremented"
-        );
+        assertEq(operatorData.collateralGwei, collateral / 1 gwei - slashAmountGwei, "collateralGwei not decremented");
 
         // Verify the slashedBefore mapping is set
         bytes32 slashingDigest =
