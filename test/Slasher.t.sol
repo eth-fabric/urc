@@ -30,7 +30,7 @@ contract DummySlasher is ISlasher {
     }
 }
 
-contract DummySlasherTest is UnitTestHelper {
+contract SlashCommitmentTester is UnitTestHelper {
     DummySlasher dummySlasher;
     BLS.G1Point delegatePubKey;
     uint256 collateral = 100 ether;
@@ -436,6 +436,301 @@ contract DummySlasherTest is UnitTestHelper {
             "collateralGwei not decremented"
         );
     }
+}
+
+contract SlashCommitmentFromOptInTester is UnitTestHelper {
+    DummySlasher dummySlasher;
+    BLS.G1Point delegatePubKey;
+    uint256 collateral = 100 ether;
+    uint256 committerSecretKey;
+    address committer;
+
+    function setUp() public {
+        registry = new Registry();
+        dummySlasher = new DummySlasher();
+        vm.deal(operator, 100 ether);
+        vm.deal(challenger, 100 ether);
+        delegatePubKey = BLS.toPublicKey(SECRET_KEY_2);
+        (committer, committerSecretKey) = makeAddrAndKey("commitmentsKey");
+    }
+
+    function testDummySlasherUpdatesRegistry() public {
+        RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
+            proposerSecretKey: SECRET_KEY_1,
+            collateral: collateral,
+            owner: operator,
+            delegateSecretKey: SECRET_KEY_2,
+            committerSecretKey: committerSecretKey,
+            committer: committer,
+            slasher: address(dummySlasher),
+            metadata: "",
+            slot: 0
+        });
+
+        RegisterAndDelegateResult memory result = registerAndDelegate(params);
+
+        ISlasher.SignedCommitment memory signedCommitment =
+            basicCommitment(params.committerSecretKey, params.slasher, "");
+
+        // skip past fraud proof window
+        vm.roll(block.timestamp + registry.FRAUD_PROOF_WINDOW() + 1);
+
+        // opt in to the slasher
+        vm.startPrank(operator);
+        registry.optInToSlasher(result.registrationRoot, address(dummySlasher), committer);
+
+        uint256 challengerBalanceBefore = challenger.balance;
+        uint256 urcBalanceBefore = address(registry).balance;
+
+        // slash
+        vm.startPrank(challenger);
+        vm.expectEmit(address(registry));
+        emit IRegistry.OperatorSlashed(
+            IRegistry.SlashingType.Commitment,
+            result.registrationRoot,
+            operator,
+            challenger,
+            address(dummySlasher),
+            dummySlasher.SLASH_AMOUNT_GWEI()
+        );
+
+        uint256 gotSlashAmountGwei =
+            registry.slashCommitmentFromOptIn(result.registrationRoot, address(dummySlasher), signedCommitment, "");
+
+        assertEq(dummySlasher.SLASH_AMOUNT_GWEI(), gotSlashAmountGwei, "Slash amount incorrect");
+
+        _verifySlashCommitmentBalances(
+            challenger, gotSlashAmountGwei * 1 gwei, 0, challengerBalanceBefore, urcBalanceBefore
+        );
+
+        IRegistry.Operator memory operatorData = getRegistrationData(result.registrationRoot);
+
+        // Verify operator's slashedAt is set
+        assertEq(operatorData.slashedAt, block.number, "slashedAt not set");
+
+        // Verify operator's collateralGwei is decremented
+        assertEq(
+            operatorData.collateralGwei, collateral / 1 gwei - gotSlashAmountGwei, "collateralGwei not decremented"
+        );
+
+        // Verify the SlasherCommitment mapping is cleared
+        (uint64 _optedInAt, address _committer) =
+            registry.slasherCommitments(keccak256(abi.encode(result.registrationRoot, address(dummySlasher))));
+
+        assertEq(_committer, address(0), "SlasherCommitment not cleared");
+        assertEq(_optedInAt, 0, "SlasherCommitment not cleared");
+    }
+
+    function testRevertFraudProofWindowNotMet() public {
+        RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
+            proposerSecretKey: SECRET_KEY_1,
+            collateral: collateral,
+            owner: operator,
+            delegateSecretKey: SECRET_KEY_2,
+            committerSecretKey: committerSecretKey,
+            committer: committer,
+            slasher: address(dummySlasher),
+            metadata: "",
+            slot: 0
+        });
+
+        RegisterAndDelegateResult memory result = registerAndDelegate(params);
+
+        ISlasher.SignedCommitment memory signedCommitment =
+            basicCommitment(params.committerSecretKey, params.slasher, "");
+
+        // Opt in to slasher
+        vm.startPrank(operator);
+        registry.optInToSlasher(result.registrationRoot, address(dummySlasher), committer);
+
+        // Try to slash before fraud proof window expires
+        vm.startPrank(challenger);
+        vm.expectRevert(IRegistry.FraudProofWindowNotMet.selector);
+        registry.slashCommitmentFromOptIn(result.registrationRoot, address(dummySlasher), signedCommitment, "");
+    }
+
+    function testRevertOperatorAlreadyUnregistered() public {
+        RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
+            proposerSecretKey: SECRET_KEY_1,
+            collateral: collateral,
+            owner: operator,
+            delegateSecretKey: SECRET_KEY_2,
+            committerSecretKey: committerSecretKey,
+            committer: committer,
+            slasher: address(dummySlasher),
+            metadata: "",
+            slot: 0
+        });
+
+        RegisterAndDelegateResult memory result = registerAndDelegate(params);
+
+        ISlasher.SignedCommitment memory signedCommitment =
+            basicCommitment(params.committerSecretKey, params.slasher, "");
+
+        // Opt in to slasher
+        vm.startPrank(operator);
+        registry.optInToSlasher(result.registrationRoot, address(dummySlasher), committer);
+
+        // Wait for fraud proof window
+        vm.roll(block.number + registry.FRAUD_PROOF_WINDOW() + 1);
+
+        // Unregister operator
+        vm.startPrank(operator);
+        registry.unregister(result.registrationRoot);
+
+        // Wait for unregistration delay
+        vm.roll(block.number + registry.UNREGISTRATION_DELAY() + 1);
+
+        // Try to slash after unregistration delay
+        vm.startPrank(challenger);
+        vm.expectRevert(IRegistry.OperatorAlreadyUnregistered.selector);
+        registry.slashCommitmentFromOptIn(result.registrationRoot, address(dummySlasher), signedCommitment, "");
+    }
+
+    function testRevertSlashWindowExpired() public {
+        RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
+            proposerSecretKey: SECRET_KEY_1,
+            collateral: collateral,
+            owner: operator,
+            delegateSecretKey: SECRET_KEY_2,
+            committerSecretKey: committerSecretKey,
+            committer: committer,
+            slasher: address(dummySlasher),
+            metadata: "",
+            slot: 0
+        });
+
+        RegisterAndDelegateResult memory result = registerAndDelegate(params);
+
+        ISlasher.SignedCommitment memory signedCommitment =
+            basicCommitment(params.committerSecretKey, params.slasher, "");
+
+        // Opt in to slasher
+        vm.startPrank(operator);
+        registry.optInToSlasher(result.registrationRoot, address(dummySlasher), committer);
+
+        // Wait for fraud proof window
+        vm.roll(block.number + registry.FRAUD_PROOF_WINDOW() + 1);
+
+        // First slash
+        vm.startPrank(challenger);
+        registry.slashCommitmentFromOptIn(result.registrationRoot, address(dummySlasher), signedCommitment, "");
+
+        // Wait for slash window to expire
+        vm.roll(block.number + registry.SLASH_WINDOW() + 1);
+
+        // Try to slash again after window expired
+        signedCommitment = basicCommitment(params.committerSecretKey, params.slasher, "different payload");
+        vm.expectRevert(IRegistry.SlashWindowExpired.selector);
+        registry.slashCommitmentFromOptIn(result.registrationRoot, address(dummySlasher), signedCommitment, "");
+    }
+
+    function testRevertNotOptedIn() public {
+        RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
+            proposerSecretKey: SECRET_KEY_1,
+            collateral: collateral,
+            owner: operator,
+            delegateSecretKey: SECRET_KEY_2,
+            committerSecretKey: committerSecretKey,
+            committer: committer,
+            slasher: address(dummySlasher),
+            metadata: "",
+            slot: 0
+        });
+
+        RegisterAndDelegateResult memory result = registerAndDelegate(params);
+
+        ISlasher.SignedCommitment memory signedCommitment =
+            basicCommitment(params.committerSecretKey, params.slasher, "");
+
+        // Wait for fraud proof window
+        vm.roll(block.number + registry.FRAUD_PROOF_WINDOW() + 1);
+
+        // Try to slash without opting in
+        vm.startPrank(challenger);
+        vm.expectRevert(IRegistry.NotOptedIn.selector);
+        registry.slashCommitmentFromOptIn(result.registrationRoot, address(dummySlasher), signedCommitment, "");
+    }
+
+    function testRevertUnauthorizedCommitment() public {
+        RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
+            proposerSecretKey: SECRET_KEY_1,
+            collateral: collateral,
+            owner: operator,
+            delegateSecretKey: SECRET_KEY_2,
+            committerSecretKey: committerSecretKey,
+            committer: committer,
+            slasher: address(dummySlasher),
+            metadata: "",
+            slot: 0
+        });
+
+        RegisterAndDelegateResult memory result = registerAndDelegate(params);
+
+        // Create commitment signed by different key
+        (address wrongCommitter, uint256 wrongCommitterKey) = makeAddrAndKey("wrongCommitter");
+        ISlasher.SignedCommitment memory signedCommitment = basicCommitment(wrongCommitterKey, params.slasher, "");
+
+        // Opt in to slasher
+        vm.startPrank(operator);
+        registry.optInToSlasher(result.registrationRoot, address(dummySlasher), committer);
+
+        // Wait for fraud proof window
+        vm.roll(block.number + registry.FRAUD_PROOF_WINDOW() + 1);
+
+        // Try to slash with unauthorized commitment
+        vm.startPrank(challenger);
+        vm.expectRevert(IRegistry.UnauthorizedCommitment.selector);
+        registry.slashCommitmentFromOptIn(result.registrationRoot, address(dummySlasher), signedCommitment, "");
+    }
+
+    function testRevertSlashAmountExceedsCollateral() public {
+        RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
+            proposerSecretKey: SECRET_KEY_1,
+            collateral: dummySlasher.SLASH_AMOUNT_GWEI() * 1 gwei - 1, // Less than slash amount
+            owner: operator,
+            delegateSecretKey: SECRET_KEY_2,
+            committerSecretKey: committerSecretKey,
+            committer: committer,
+            slasher: address(dummySlasher),
+            metadata: "",
+            slot: 0
+        });
+
+        RegisterAndDelegateResult memory result = registerAndDelegate(params);
+
+        ISlasher.SignedCommitment memory signedCommitment =
+            basicCommitment(params.committerSecretKey, params.slasher, "");
+
+        // Opt in to slasher
+        vm.startPrank(operator);
+        registry.optInToSlasher(result.registrationRoot, address(dummySlasher), committer);
+
+        // Wait for fraud proof window
+        vm.roll(block.number + registry.FRAUD_PROOF_WINDOW() + 1);
+
+        // Try to slash with amount exceeding collateral
+        vm.startPrank(challenger);
+        vm.expectRevert(IRegistry.SlashAmountExceedsCollateral.selector);
+        registry.slashCommitmentFromOptIn(result.registrationRoot, address(dummySlasher), signedCommitment, "");
+    }
+}
+
+contract SlashEquivocationTester is UnitTestHelper {
+    DummySlasher dummySlasher;
+    BLS.G1Point delegatePubKey;
+    uint256 collateral = 100 ether;
+    uint256 committerSecretKey;
+    address committer;
+
+    function setUp() public {
+        registry = new Registry();
+        dummySlasher = new DummySlasher();
+        vm.deal(operator, 100 ether);
+        vm.deal(challenger, 100 ether);
+        delegatePubKey = BLS.toPublicKey(SECRET_KEY_2);
+        (committer, committerSecretKey) = makeAddrAndKey("commitmentsKey");
+    }
 
     function testEquivocation() public {
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
@@ -771,6 +1066,23 @@ contract DummySlasherTest is UnitTestHelper {
             result.signedDelegation,
             signedDelegationTwo
         );
+    }
+}
+
+contract SlashReentrantTester is UnitTestHelper {
+    DummySlasher dummySlasher;
+    BLS.G1Point delegatePubKey;
+    uint256 collateral = 100 ether;
+    uint256 committerSecretKey;
+    address committer;
+
+    function setUp() public {
+        registry = new Registry();
+        dummySlasher = new DummySlasher();
+        vm.deal(operator, 100 ether);
+        vm.deal(challenger, 100 ether);
+        delegatePubKey = BLS.toPublicKey(SECRET_KEY_2);
+        (committer, committerSecretKey) = makeAddrAndKey("commitmentsKey");
     }
 
     // For setup we register() and delegate to the dummy slasher

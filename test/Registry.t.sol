@@ -421,7 +421,6 @@ contract ClaimCollateralTester is UnitTestHelper {
         vm.expectRevert(IRegistry.NoCollateralToClaim.selector);
         registry.claimCollateral(registrationRoot);
     }
-
 }
 
 contract AddCollateralTester is UnitTestHelper {
