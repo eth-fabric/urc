@@ -27,6 +27,8 @@ interface IRegistry {
         address owner;
         /// ETH collateral in GWEI
         uint56 collateralGwei;
+        /// The number of keys registered per operator (capped at 255)
+        uint8 numKeys;
         /// The block number when registration occurred
         uint32 registeredAt;
         /// The block number when deregistration occurred

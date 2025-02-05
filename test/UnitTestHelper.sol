@@ -104,12 +104,19 @@ contract UnitTestHelper is Test {
     }
 
     function getRegistrationData(bytes32 registrationRoot) public view returns (IRegistry.Operator memory) {
-        (address owner, uint56 collateralGwei, uint32 registeredAt, uint32 unregisteredAt, uint32 slashedAt) =
-            registry.registrations(registrationRoot);
+        (
+            address owner,
+            uint56 collateralGwei,
+            uint8 numKeys,
+            uint32 registeredAt,
+            uint32 unregisteredAt,
+            uint32 slashedAt
+        ) = registry.registrations(registrationRoot);
 
         return IRegistry.Operator({
             owner: owner,
             collateralGwei: collateralGwei,
+            numKeys: numKeys,
             registeredAt: registeredAt,
             unregisteredAt: unregisteredAt,
             slashedAt: slashedAt

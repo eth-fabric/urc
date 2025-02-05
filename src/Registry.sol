@@ -72,6 +72,7 @@ contract Registry is IRegistry {
         registrations[registrationRoot] = Operator({
             owner: owner,
             collateralGwei: uint56(msg.value / 1 gwei),
+            numKeys: uint8(regs.length),
             registeredAt: uint32(block.number),
             unregisteredAt: type(uint32).max,
             slashedAt: 0
