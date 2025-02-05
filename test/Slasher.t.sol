@@ -103,7 +103,7 @@ contract SlashCommitmentTester is UnitTestHelper {
             challenger, gotSlashAmountGwei * 1 gwei, 0, challengerBalanceBefore, urcBalanceBefore
         );
 
-        IRegistry.Operator memory operatorData = getRegistrationData(result.registrationRoot);
+        OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
 
         // Verify operator's slashedAt is set
         assertEq(operatorData.slashedAt, block.number, "slashedAt not set");
@@ -304,7 +304,7 @@ contract SlashCommitmentTester is UnitTestHelper {
             evidence
         );
 
-        IRegistry.Operator memory operatorData = getRegistrationData(result.registrationRoot);
+        OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
 
         // attempt to claim collateral
         vm.expectRevert(IRegistry.SlashWindowNotMet.selector);
@@ -427,7 +427,7 @@ contract SlashCommitmentTester is UnitTestHelper {
             evidence
         );
 
-        IRegistry.Operator memory operatorData = getRegistrationData(result.registrationRoot);
+        OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
 
         // verify operator's collateralGwei is decremented by 2 slashings
         assertEq(
@@ -503,7 +503,7 @@ contract SlashCommitmentFromOptInTester is UnitTestHelper {
             challenger, gotSlashAmountGwei * 1 gwei, 0, challengerBalanceBefore, urcBalanceBefore
         );
 
-        IRegistry.Operator memory operatorData = getRegistrationData(result.registrationRoot);
+        OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
 
         // Verify operator's slashedAt is set
         assertEq(operatorData.slashedAt, block.number, "slashedAt not set");
@@ -514,11 +514,12 @@ contract SlashCommitmentFromOptInTester is UnitTestHelper {
         );
 
         // Verify the SlasherCommitment mapping is cleared
-        (uint64 _optedInAt, address _committer) =
-            registry.slasherCommitments(keccak256(abi.encode(result.registrationRoot, address(dummySlasher))));
+        IRegistry.SlasherCommitment memory slasherCommitment =
+            registry.getSlasherCommitment(result.registrationRoot, address(dummySlasher));
 
-        assertEq(_committer, address(0), "SlasherCommitment not cleared");
-        assertEq(_optedInAt, 0, "SlasherCommitment not cleared");
+        assertEq(slasherCommitment.committer, address(0), "SlasherCommitment not cleared");
+        assertEq(slasherCommitment.optedInAt, 0, "SlasherCommitment not cleared");
+        assertEq(slasherCommitment.optedOutAt, 0, "SlasherCommitment not cleared");
     }
 
     function testRevertFraudProofWindowNotMet() public {
@@ -778,7 +779,7 @@ contract SlashEquivocationTester is UnitTestHelper {
             signedDelegationTwo
         );
 
-        IRegistry.Operator memory operatorData = getRegistrationData(result.registrationRoot);
+        OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
 
         // verify operator's collateralGwei is decremented by MIN_COLLATERAL
         assertEq(
@@ -1151,7 +1152,7 @@ contract SlashReentrantTester is UnitTestHelper {
         );
         assertEq(registry.MIN_COLLATERAL() / 1 gwei, gotSlashAmountGwei, "Slash amount incorrect");
 
-        IRegistry.Operator memory operatorData = getRegistrationData(result.registrationRoot);
+        OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
 
         // verify operator's collateralGwei is decremented by MIN_COLLATERAL
         assertEq(
@@ -1173,5 +1174,142 @@ contract SlashReentrantTester is UnitTestHelper {
             operatorCollateralGweiBefore - gotSlashAmountGwei,
             "collateralGwei not decremented"
         );
+    }
+}
+
+contract SlashConditionTester is UnitTestHelper {
+    DummySlasher dummySlasher;
+    BLS.G1Point delegatePubKey;
+    uint256 collateral = 100 ether;
+    uint256 committerSecretKey;
+    address committer;
+
+    function setUp() public {
+        registry = new Registry();
+        dummySlasher = new DummySlasher();
+        vm.deal(operator, 100 ether);
+        vm.deal(challenger, 100 ether);
+        delegatePubKey = BLS.toPublicKey(SECRET_KEY_2);
+        (committer, committerSecretKey) = makeAddrAndKey("commitmentsKey");
+    }
+
+    function test_cannot_unregister_after_slashing() public {
+        RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
+            proposerSecretKey: SECRET_KEY_1,
+            collateral: collateral,
+            owner: operator,
+            delegateSecretKey: SECRET_KEY_2,
+            committerSecretKey: committerSecretKey,
+            committer: committer,
+            slasher: address(dummySlasher),
+            metadata: "",
+            slot: uint64(UINT256_MAX)
+        });
+
+        RegisterAndDelegateResult memory result = registerAndDelegate(params);
+
+        // Create two different delegations for the same slot to trigger equivocation
+        ISlasher.SignedDelegation memory signedDelegationTwo = signDelegation(
+            params.proposerSecretKey,
+            ISlasher.Delegation({
+                proposer: BLS.toPublicKey(params.proposerSecretKey),
+                delegate: BLS.toPublicKey(params.delegateSecretKey),
+                committer: params.committer,
+                slot: params.slot,
+                metadata: "different metadata"
+            })
+        );
+
+        // Setup proof
+        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        uint256 leafIndex = 0;
+        bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
+
+        // skip past fraud proof window
+        vm.roll(block.timestamp + registry.FRAUD_PROOF_WINDOW() + 1);
+
+        // Slash the operator for equivocation
+        vm.startPrank(challenger);
+        registry.slashEquivocation(
+            result.registrationRoot,
+            result.registrations[leafIndex].signature,
+            proof,
+            leafIndex,
+            result.signedDelegation,
+            signedDelegationTwo
+        );
+        vm.stopPrank();
+
+        // Verify operator was slashed
+        OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
+        assertEq(operatorData.slashedAt, block.number, "operator not slashed");
+
+        // Try to unregister after being slashed
+        vm.startPrank(operator);
+        vm.expectRevert(IRegistry.SlashingAlreadyOccurred.selector);
+        registry.unregister(result.registrationRoot);
+    }
+
+    function test_cannot_claimCollateral_after_slashing() public {
+        RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
+            proposerSecretKey: SECRET_KEY_1,
+            collateral: collateral,
+            owner: operator,
+            delegateSecretKey: SECRET_KEY_2,
+            committerSecretKey: committerSecretKey,
+            committer: committer,
+            slasher: address(dummySlasher),
+            metadata: "",
+            slot: uint64(UINT256_MAX)
+        });
+
+        RegisterAndDelegateResult memory result = registerAndDelegate(params);
+
+        // Create two different delegations for the same slot to trigger equivocation
+        ISlasher.SignedDelegation memory signedDelegationTwo = signDelegation(
+            params.proposerSecretKey,
+            ISlasher.Delegation({
+                proposer: BLS.toPublicKey(params.proposerSecretKey),
+                delegate: BLS.toPublicKey(params.delegateSecretKey),
+                committer: params.committer,
+                slot: params.slot,
+                metadata: "different metadata"
+            })
+        );
+
+        // Setup proof
+        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        uint256 leafIndex = 0;
+        bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
+
+        // skip past fraud proof window
+        vm.roll(block.timestamp + registry.FRAUD_PROOF_WINDOW() + 1);
+
+        // Start the normal unregistration path
+        vm.startPrank(operator);
+        registry.unregister(result.registrationRoot);
+
+        // Slash the operator for equivocation
+        vm.startPrank(challenger);
+        registry.slashEquivocation(
+            result.registrationRoot,
+            result.registrations[leafIndex].signature,
+            proof,
+            leafIndex,
+            result.signedDelegation,
+            signedDelegationTwo
+        );
+        vm.stopPrank();
+
+        // Verify operator was slashed
+        OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
+        assertEq(operatorData.slashedAt, block.number, "operator not slashed");
+
+        // Move past unregistration delay
+        vm.roll(block.number + registry.UNREGISTRATION_DELAY() + 1);
+
+        // Try to claim collateral through normal path - should fail
+        vm.expectRevert(IRegistry.SlashingAlreadyOccurred.selector);
+        registry.claimCollateral(result.registrationRoot);
     }
 }

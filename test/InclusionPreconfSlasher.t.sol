@@ -253,7 +253,7 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
         );
 
         // Retrieve operator data
-        IRegistry.Operator memory operatorData = getRegistrationData(result.registrationRoot);
+        OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
 
         // Verify operator's slashedAt is set
         assertEq(operatorData.slashedAt, block.number, "slashedAt not set");

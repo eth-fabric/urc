@@ -47,7 +47,7 @@ contract UnitTestHelper is Test {
         uint32 expectedUnregisteredAt,
         uint32 expectedSlashedAt
     ) internal view {
-        IRegistry.Operator memory operatorData = getRegistrationData(registrationRoot);
+        OperatorData memory operatorData = getRegistrationData(registrationRoot);
         assertEq(operatorData.owner, expectedowner, "Wrong withdrawal address");
         assertEq(operatorData.collateralGwei, expectedCollateral, "Wrong collateral amount");
         assertEq(operatorData.registeredAt, expectedRegisteredAt, "Wrong registration block");
@@ -103,7 +103,16 @@ contract UnitTestHelper is Test {
         assertEq(address(registry).balance, _urcBalanceBefore - _slashedAmount - _rewardAmount, "urc balance incorrect");
     }
 
-    function getRegistrationData(bytes32 registrationRoot) public view returns (IRegistry.Operator memory) {
+    struct OperatorData {
+        address owner;
+        uint56 collateralGwei;
+        uint8 numKeys;
+        uint32 registeredAt;
+        uint32 unregisteredAt;
+        uint32 slashedAt;
+    }
+
+    function getRegistrationData(bytes32 registrationRoot) public view returns (OperatorData memory) {
         (
             address owner,
             uint56 collateralGwei,
@@ -113,7 +122,7 @@ contract UnitTestHelper is Test {
             uint32 slashedAt
         ) = registry.registrations(registrationRoot);
 
-        return IRegistry.Operator({
+        return OperatorData({
             owner: owner,
             collateralGwei: collateralGwei,
             numKeys: numKeys,

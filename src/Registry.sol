@@ -17,9 +17,6 @@ contract Registry is IRegistry {
     /// @notice Mapping to track if a slashing has occurred before with same input
     mapping(bytes32 slashingDigest => bool) public slashedBefore;
 
-    /// @notice Mapping to track opt-in and opt-out status for proposer commitment protocols
-    mapping(bytes32 => SlasherCommitment) public slasherCommitments;
-
     // Constants
     uint256 public constant MIN_COLLATERAL = 0.1 ether;
     uint256 public constant UNREGISTRATION_DELAY = 7200; // 1 day
@@ -69,14 +66,13 @@ contract Registry is IRegistry {
         }
 
         // Each Operator is mapped to a unique registration root
-        registrations[registrationRoot] = Operator({
-            owner: owner,
-            collateralGwei: uint56(msg.value / 1 gwei),
-            numKeys: uint8(regs.length),
-            registeredAt: uint32(block.number),
-            unregisteredAt: type(uint32).max,
-            slashedAt: 0
-        });
+        Operator storage newOperator = registrations[registrationRoot];
+        newOperator.owner = owner;
+        newOperator.collateralGwei = uint56(msg.value / 1 gwei);
+        newOperator.numKeys = uint8(regs.length);
+        newOperator.registeredAt = uint32(block.number);
+        newOperator.unregisteredAt = type(uint32).max;
+        newOperator.slashedAt = 0;
 
         emit OperatorRegistered(registrationRoot, uint56(msg.value / 1 gwei), owner);
     }
@@ -99,6 +95,12 @@ contract Registry is IRegistry {
         // Prevent double unregistrations
         if (operator.unregisteredAt != type(uint32).max) {
             revert AlreadyUnregistered();
+        }
+
+        // Prevent a slashed operator from unregistering
+        // They must wait for the slash window to pass before calling claimSlashedCollateral()
+        if (operator.slashedAt != 0) {
+            revert SlashingAlreadyOccurred();
         }
 
         // Save the block number; they must wait for the unregistration delay to claim collateral
@@ -124,16 +126,21 @@ contract Registry is IRegistry {
         }
 
         // Retrieve the SlasherCommitment struct
-        SlasherCommitment storage slasherCommitment =
-            slasherCommitments[keccak256(abi.encode(registrationRoot, slasher))];
+        SlasherCommitment storage slasherCommitment = operator.slasherCommitments[slasher];
 
-        // Prevent double opt-ins
-        if (slasherCommitment.optedInAt != 0) {
+        // Check if already opted in
+        if (slasherCommitment.optedOutAt < slasherCommitment.optedInAt) {
             revert AlreadyOptedIn();
+        }
+
+        // If previously opted out, enforce delay before allowing new opt-in
+        if (slasherCommitment.optedOutAt != 0 && block.timestamp < slasherCommitment.optedOutAt + OPT_IN_DELAY) {
+            revert OptInDelayNotMet();
         }
 
         // Save the block number and committer
         slasherCommitment.optedInAt = uint64(block.number);
+        slasherCommitment.optedOutAt = 0;
         slasherCommitment.committer = committer;
 
         emit OperatorOptedIn(registrationRoot, slasher, committer);
@@ -154,16 +161,20 @@ contract Registry is IRegistry {
         }
 
         // Retrieve the SlasherCommitment struct
-        bytes32 slasherCommitmentId = keccak256(abi.encode(registrationRoot, slasher));
-        SlasherCommitment storage slasherCommitment = slasherCommitments[slasherCommitmentId];
+        SlasherCommitment storage slasherCommitment = operator.slasherCommitments[slasher];
+
+        // Check if already opted out or never opted in
+        if (slasherCommitment.optedOutAt >= slasherCommitment.optedInAt) {
+            revert NotOptedIn();
+        }
 
         // Enforce a delay before allowing opt-out
         if (block.number < slasherCommitment.optedInAt + OPT_IN_DELAY) {
             revert OptInDelayNotMet();
         }
 
-        // Delete the entry
-        delete slasherCommitments[slasherCommitmentId];
+        // Save the block number
+        slasherCommitment.optedOutAt = uint64(block.number);
 
         emit OperatorOptedOut(registrationRoot, slasher);
     }
@@ -383,11 +394,10 @@ contract Registry is IRegistry {
         }
 
         // Recover the SlasherCommitment entry
-        bytes32 slasherCommitmentId = keccak256(abi.encode(registrationRoot, slasher));
-        SlasherCommitment storage slasherCommitment = slasherCommitments[slasherCommitmentId];
+        SlasherCommitment storage slasherCommitment = operator.slasherCommitments[slasher];
 
         // Verify the operator is opted into protocol
-        if (slasherCommitment.optedInAt == 0) {
+        if (slasherCommitment.optedInAt <= slasherCommitment.optedOutAt) {
             revert NotOptedIn();
         }
 
@@ -414,7 +424,7 @@ contract Registry is IRegistry {
         operator.collateralGwei -= uint56(slashAmountGwei);
 
         // Prevent same slashing from occurring again
-        delete slasherCommitments[slasherCommitmentId];
+        delete operator.slasherCommitments[slasher];
 
         emit OperatorSlashed(
             SlashingType.Commitment, registrationRoot, operator.owner, msg.sender, slasher, slashAmountGwei
@@ -563,6 +573,11 @@ contract Registry is IRegistry {
             revert UnregistrationDelayNotMet();
         }
 
+        // Check that the operator has not been slashed
+        if (operator.slashedAt != 0) {
+            revert SlashingAlreadyOccurred();
+        }
+
         // Check there's collateral to claim
         if (collateralGwei == 0) {
             revert NoCollateralToClaim();
@@ -609,7 +624,7 @@ contract Registry is IRegistry {
 
     /**
      *
-     *                                Helper Functions                           *
+     *                                Getter Functions                           *
      *
      */
 
@@ -627,6 +642,55 @@ contract Registry is IRegistry {
     {
         collateralGwei = _verifyMerkleProof(registrationRoot, leaf, proof, leafIndex);
     }
+
+    /// @notice Checks if an operator is opted into a protocol
+    /// @param registrationRoot The merkle root generated and stored from the register() function
+    /// @param slasher The address of the slasher to check
+    /// @return slasherCommitment The slasher commitment (default values if not opted in)
+    function getSlasherCommitment(bytes32 registrationRoot, address slasher)
+        external
+        view
+        returns (SlasherCommitment memory slasherCommitment)
+    {
+        Operator storage operator = registrations[registrationRoot];
+        slasherCommitment = operator.slasherCommitments[slasher];
+    }
+
+    /// @notice Checks if an operator is opted into a protocol
+    /// @param registrationRoot The merkle root generated and stored from the register() function
+    /// @param slasher The address of the slasher to check
+    /// @return True if the operator is opted in, false otherwise
+    function isOptedIntoSlasher(bytes32 registrationRoot, address slasher) external view returns (bool) {
+        Operator storage operator = registrations[registrationRoot];
+        return operator.slasherCommitments[slasher].optedOutAt < operator.slasherCommitments[slasher].optedInAt;
+    }
+
+    /// @notice Get the committer for an operator's slasher commitment
+    /// @param registrationRoot The merkle root generated and stored from the register() function
+    /// @param reg The registration to verify
+    /// @param proof The merkle proof to verify the operator's key is in the registry
+    /// @param leafIndex The index of the leaf in the merkle tree
+    /// @param slasher The address of the slasher to check
+    /// @return slasherCommitment The slasher commitment (default values if not opted in)
+    /// @return collateralGwei The collateral amount in GWEI (0 if not opted in)
+    function getOptedInCommitter(
+        bytes32 registrationRoot,
+        Registration calldata reg,
+        bytes32[] calldata proof,
+        uint256 leafIndex,
+        address slasher
+    ) external view returns (SlasherCommitment memory slasherCommitment, uint256 collateralGwei) {
+        Operator storage operator = registrations[registrationRoot];
+        slasherCommitment = operator.slasherCommitments[slasher];
+
+        collateralGwei = _verifyMerkleProof(registrationRoot, keccak256(abi.encode(reg)), proof, leafIndex);
+    }
+
+    /**
+     *
+     *                                Helper Functions                           *
+     *
+     */
 
     /// @notice Merkleizes an array of `Registration` structs
     /// @dev Leaves are created by abi-encoding the `Registration` structs, then hashing with keccak256.

@@ -181,7 +181,7 @@ contract UnregisterTester is UnitTestHelper {
         emit IRegistry.OperatorUnregistered(registrationRoot, uint32(block.number));
         registry.unregister(registrationRoot);
 
-        IRegistry.Operator memory operatorData = getRegistrationData(registrationRoot);
+        OperatorData memory operatorData = getRegistrationData(registrationRoot);
         assertEq(operatorData.unregisteredAt, uint32(block.number), "Wrong unregistration block");
         assertEq(operatorData.registeredAt, uint32(block.number), "Wrong registration block"); // Should remain unchanged
     }
@@ -366,7 +366,7 @@ contract ClaimCollateralTester is UnitTestHelper {
         assertEq(operator.balance, balanceBefore + collateral, "Collateral not returned");
 
         // Verify registration was deleted
-        IRegistry.Operator memory operatorData = getRegistrationData(registrationRoot);
+        OperatorData memory operatorData = getRegistrationData(registrationRoot);
         assertEq(operatorData.owner, address(0), "Registration not deleted");
     }
 
@@ -449,7 +449,7 @@ contract AddCollateralTester is UnitTestHelper {
         emit IRegistry.CollateralAdded(registrationRoot, expectedCollateralGwei);
         registry.addCollateral{ value: addAmount }(registrationRoot);
 
-        IRegistry.Operator memory operatorData = getRegistrationData(registrationRoot);
+        OperatorData memory operatorData = getRegistrationData(registrationRoot);
         assertEq(operatorData.collateralGwei, expectedCollateralGwei, "Collateral not added");
     }
 
@@ -467,7 +467,7 @@ contract AddCollateralTester is UnitTestHelper {
         vm.expectRevert(IRegistry.CollateralOverflow.selector);
         registry.addCollateral{ value: addAmount }(registrationRoot);
 
-        IRegistry.Operator memory operatorData = getRegistrationData(registrationRoot);
+        OperatorData memory operatorData = getRegistrationData(registrationRoot);
         assertEq(operatorData.collateralGwei, uint56(collateral / 1 gwei), "Collateral should not be changed");
     }
 
@@ -486,6 +486,54 @@ contract SlashRegistrationTester is UnitTestHelper {
         vm.deal(operator, 100 ether);
         vm.deal(challenger, 100 ether);
         vm.deal(thief, 100 ether);
+    }
+
+    function test_slashRegistration_badSignature() public {
+        uint256 collateral = 2 * registry.MIN_COLLATERAL();
+
+        IRegistry.Registration[] memory registrations = new IRegistry.Registration[](1);
+
+        BLS.G1Point memory pubkey = BLS.toPublicKey(SECRET_KEY_1);
+
+        // Use a different secret key to sign the registration
+        BLS.G2Point memory signature = _registrationSignature(SECRET_KEY_2, operator);
+
+        registrations[0] = IRegistry.Registration({ pubkey: pubkey, signature: signature });
+
+        bytes32 registrationRoot = registry.register{ value: collateral }(registrations, operator);
+
+        _assertRegistration(
+            registrationRoot, operator, uint56(collateral / 1 gwei), uint32(block.number), type(uint32).max, 0
+        );
+
+        // generate merkle proof
+        bytes32[] memory leaves = _hashToLeaves(registrations);
+        bytes32[] memory proof = MerkleTree.generateProof(leaves, 0);
+
+        uint256 operatorBalanceBefore = operator.balance;
+        uint256 urcBalanceBefore = address(registry).balance;
+
+        vm.startPrank(challenger);
+        uint256 rewardCollateralWei = registry.slashRegistration(
+            registrationRoot,
+            registrations[0],
+            proof,
+            0 // leafIndex
+        );
+
+        _verifySlashingBalances(
+            operator,
+            challenger,
+            0,
+            rewardCollateralWei,
+            collateral,
+            operatorBalanceBefore,
+            operatorBalanceBefore,
+            urcBalanceBefore
+        );
+
+        // ensure operator was deleted
+        _assertRegistration(registrationRoot, address(0), 0, 0, 0, 0);
     }
 
     function test_slashRegistrationHeight1_DifferentOwner() public {
@@ -673,7 +721,7 @@ contract RentrancyTester is UnitTestHelper {
         );
 
         // Verify registration was deleted
-        IRegistry.Operator memory operatorData = getRegistrationData(reentrantContract.registrationRoot());
+        OperatorData memory operatorData = getRegistrationData(reentrantContract.registrationRoot());
         assertEq(operatorData.owner, address(0), "Registration not deleted");
     }
 

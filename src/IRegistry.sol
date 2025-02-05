@@ -35,12 +35,16 @@ interface IRegistry {
         uint32 unregisteredAt;
         /// The block number when slashed from breaking a commitment
         uint32 slashedAt;
+        /// Mapping to track opt-in and opt-out status for proposer commitment protocols
+        mapping(address slasher => SlasherCommitment) slasherCommitments;
     }
 
     /// @notice A struct to track opt-in and opt-out status for proposer commitment protocols
     struct SlasherCommitment {
         /// The block number when the operator opted in
         uint64 optedInAt;
+        /// The block number when the operator opted out
+        uint64 optedOutAt;
         /// The address of the key used for commitments
         address committer;
     }
