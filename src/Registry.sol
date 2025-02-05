@@ -325,7 +325,7 @@ contract Registry is IRegistry {
         );
 
         // Prevent slashing more than the operator's collateral
-        if (slashAmountGwei > operator.collateralGwei) {
+        if (slashAmountGwei > collateralGwei) {
             revert SlashAmountExceedsCollateral();
         }
 
@@ -373,7 +373,6 @@ contract Registry is IRegistry {
         bytes calldata evidence
     ) external returns (uint256 slashAmountGwei) {
         Operator storage operator = registrations[registrationRoot];
-        address owner = operator.owner;
 
         // Operator is not liable for slashings before the fraud proof window elapses
         if (block.number < operator.registeredAt + FRAUD_PROOF_WINDOW) {

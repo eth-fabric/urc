@@ -166,10 +166,11 @@ interface IRegistry {
         payable
         returns (bytes32 registrationRoot);
 
-    function verifyMerkleProof(bytes32 registrationRoot, bytes32 leaf, bytes32[] calldata proof, uint256 leafIndex)
-        external
-        view
-        returns (uint256 collateralGwei);
+    function unregister(bytes32 registrationRoot) external;
+
+    function optInToSlasher(bytes32 registrationRoot, address slasher, address committer) external;
+
+    function optOutOfSlasher(bytes32 registrationRoot, address slasher) external;
 
     function slashRegistration(
         bytes32 registrationRoot,
@@ -178,18 +179,19 @@ interface IRegistry {
         uint256 leafIndex
     ) external returns (uint256 collateral);
 
-    function unregister(bytes32 registrationRoot) external;
-
-    function claimCollateral(bytes32 registrationRoot) external;
-
-    function addCollateral(bytes32 registrationRoot) external payable;
-
     function slashCommitment(
         bytes32 registrationRoot,
         BLS.G2Point calldata registrationSignature,
         bytes32[] calldata proof,
         uint256 leafIndex,
         ISlasher.SignedDelegation calldata delegation,
+        ISlasher.SignedCommitment calldata commitment,
+        bytes calldata evidence
+    ) external returns (uint256 slashAmountGwei);
+
+    function slashCommitmentFromOptIn(
+        bytes32 registrationRoot,
+        address slasher,
         ISlasher.SignedCommitment calldata commitment,
         bytes calldata evidence
     ) external returns (uint256 slashAmountGwei);
@@ -203,10 +205,29 @@ interface IRegistry {
         ISlasher.SignedDelegation calldata delegationTwo
     ) external returns (uint256 slashAmountGwei);
 
-    function slashCommitmentFromOptIn(
+    function addCollateral(bytes32 registrationRoot) external payable;
+
+    function claimCollateral(bytes32 registrationRoot) external;
+
+    function claimSlashedCollateral(bytes32 registrationRoot) external;
+
+    function verifyMerkleProof(bytes32 registrationRoot, bytes32 leaf, bytes32[] calldata proof, uint256 leafIndex)
+        external
+        view
+        returns (uint256 collateralGwei);
+
+    function getSlasherCommitment(bytes32 registrationRoot, address slasher)
+        external
+        view
+        returns (SlasherCommitment memory slasherCommitment);
+
+    function isOptedIntoSlasher(bytes32 registrationRoot, address slasher) external view returns (bool);
+
+    function getOptedInCommitter(
         bytes32 registrationRoot,
-        address slasher,
-        ISlasher.SignedCommitment calldata commitment,
-        bytes calldata evidence
-    ) external returns (uint256 slashAmountGwei);
+        Registration calldata reg,
+        bytes32[] calldata proof,
+        uint256 leafIndex,
+        address slasher
+    ) external view returns (SlasherCommitment memory slasherCommitment, uint256 collateralGwei);
 }
