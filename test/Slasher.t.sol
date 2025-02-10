@@ -494,8 +494,7 @@ contract SlashCommitmentFromOptInTester is UnitTestHelper {
             dummySlasher.SLASH_AMOUNT_GWEI()
         );
 
-        uint256 gotSlashAmountGwei =
-            registry.slashCommitmentFromOptIn(result.registrationRoot, address(dummySlasher), signedCommitment, "");
+        uint256 gotSlashAmountGwei = registry.slashCommitmentFromOptIn(result.registrationRoot, signedCommitment, "");
 
         assertEq(dummySlasher.SLASH_AMOUNT_GWEI(), gotSlashAmountGwei, "Slash amount incorrect");
 
@@ -547,7 +546,7 @@ contract SlashCommitmentFromOptInTester is UnitTestHelper {
         // Try to slash before fraud proof window expires
         vm.startPrank(challenger);
         vm.expectRevert(IRegistry.FraudProofWindowNotMet.selector);
-        registry.slashCommitmentFromOptIn(result.registrationRoot, address(dummySlasher), signedCommitment, "");
+        registry.slashCommitmentFromOptIn(result.registrationRoot, signedCommitment, "");
     }
 
     function testRevertOperatorAlreadyUnregistered() public {
@@ -585,7 +584,7 @@ contract SlashCommitmentFromOptInTester is UnitTestHelper {
         // Try to slash after unregistration delay
         vm.startPrank(challenger);
         vm.expectRevert(IRegistry.OperatorAlreadyUnregistered.selector);
-        registry.slashCommitmentFromOptIn(result.registrationRoot, address(dummySlasher), signedCommitment, "");
+        registry.slashCommitmentFromOptIn(result.registrationRoot, signedCommitment, "");
     }
 
     function testRevertSlashWindowExpired() public {
@@ -615,7 +614,7 @@ contract SlashCommitmentFromOptInTester is UnitTestHelper {
 
         // First slash
         vm.startPrank(challenger);
-        registry.slashCommitmentFromOptIn(result.registrationRoot, address(dummySlasher), signedCommitment, "");
+        registry.slashCommitmentFromOptIn(result.registrationRoot, signedCommitment, "");
 
         // Wait for slash window to expire
         vm.roll(block.number + registry.SLASH_WINDOW() + 1);
@@ -623,7 +622,7 @@ contract SlashCommitmentFromOptInTester is UnitTestHelper {
         // Try to slash again after window expired
         signedCommitment = basicCommitment(params.committerSecretKey, params.slasher, "different payload");
         vm.expectRevert(IRegistry.SlashWindowExpired.selector);
-        registry.slashCommitmentFromOptIn(result.registrationRoot, address(dummySlasher), signedCommitment, "");
+        registry.slashCommitmentFromOptIn(result.registrationRoot, signedCommitment, "");
     }
 
     function testRevertNotOptedIn() public {
@@ -650,7 +649,7 @@ contract SlashCommitmentFromOptInTester is UnitTestHelper {
         // Try to slash without opting in
         vm.startPrank(challenger);
         vm.expectRevert(IRegistry.NotOptedIn.selector);
-        registry.slashCommitmentFromOptIn(result.registrationRoot, address(dummySlasher), signedCommitment, "");
+        registry.slashCommitmentFromOptIn(result.registrationRoot, signedCommitment, "");
     }
 
     function testRevertUnauthorizedCommitment() public {
@@ -682,7 +681,7 @@ contract SlashCommitmentFromOptInTester is UnitTestHelper {
         // Try to slash with unauthorized commitment
         vm.startPrank(challenger);
         vm.expectRevert(IRegistry.UnauthorizedCommitment.selector);
-        registry.slashCommitmentFromOptIn(result.registrationRoot, address(dummySlasher), signedCommitment, "");
+        registry.slashCommitmentFromOptIn(result.registrationRoot, signedCommitment, "");
     }
 
     function testRevertSlashAmountExceedsCollateral() public {
@@ -713,7 +712,7 @@ contract SlashCommitmentFromOptInTester is UnitTestHelper {
         // Try to slash with amount exceeding collateral
         vm.startPrank(challenger);
         vm.expectRevert(IRegistry.SlashAmountExceedsCollateral.selector);
-        registry.slashCommitmentFromOptIn(result.registrationRoot, address(dummySlasher), signedCommitment, "");
+        registry.slashCommitmentFromOptIn(result.registrationRoot, signedCommitment, "");
     }
 }
 

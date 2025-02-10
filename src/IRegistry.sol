@@ -191,7 +191,6 @@ interface IRegistry {
 
     function slashCommitmentFromOptIn(
         bytes32 registrationRoot,
-        address slasher,
         ISlasher.SignedCommitment calldata commitment,
         bytes calldata evidence
     ) external returns (uint256 slashAmountGwei);

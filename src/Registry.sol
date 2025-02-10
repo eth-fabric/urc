@@ -363,16 +363,15 @@ contract Registry is IRegistry {
     /// @dev - The commitment was not signed by registered committer (UnauthorizedCommitment)
     /// @dev - The slash amount exceeds operator's collateral (SlashAmountExceedsCollateral)
     /// @param registrationRoot The merkle root generated and stored from the register() function
-    /// @param slasher The address of the Slasher contract
     /// @param commitment The SignedCommitment signed by the delegate's ECDSA key
     /// @param evidence Arbitrary evidence to slash the operator, required by the Slasher contract
     function slashCommitmentFromOptIn(
         bytes32 registrationRoot,
-        address slasher,
         ISlasher.SignedCommitment calldata commitment,
         bytes calldata evidence
     ) external returns (uint256 slashAmountGwei) {
         Operator storage operator = registrations[registrationRoot];
+        address slasher = commitment.commitment.slasher;
 
         // Operator is not liable for slashings before the fraud proof window elapses
         if (block.number < operator.registeredAt + FRAUD_PROOF_WINDOW) {
