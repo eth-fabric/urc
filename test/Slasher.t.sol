@@ -521,34 +521,6 @@ contract SlashCommitmentFromOptInTester is UnitTestHelper {
         assertEq(slasherCommitment.optedOutAt, 0, "SlasherCommitment not cleared");
     }
 
-    function testRevertFraudProofWindowNotMet() public {
-        RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
-            proposerSecretKey: SECRET_KEY_1,
-            collateral: collateral,
-            owner: operator,
-            delegateSecretKey: SECRET_KEY_2,
-            committerSecretKey: committerSecretKey,
-            committer: committer,
-            slasher: address(dummySlasher),
-            metadata: "",
-            slot: 0
-        });
-
-        RegisterAndDelegateResult memory result = registerAndDelegate(params);
-
-        ISlasher.SignedCommitment memory signedCommitment =
-            basicCommitment(params.committerSecretKey, params.slasher, "");
-
-        // Opt in to slasher
-        vm.startPrank(operator);
-        registry.optInToSlasher(result.registrationRoot, address(dummySlasher), committer);
-
-        // Try to slash before fraud proof window expires
-        vm.startPrank(challenger);
-        vm.expectRevert(IRegistry.FraudProofWindowNotMet.selector);
-        registry.slashCommitmentFromOptIn(result.registrationRoot, signedCommitment, "");
-    }
-
     function testRevertOperatorAlreadyUnregistered() public {
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
             proposerSecretKey: SECRET_KEY_1,
@@ -566,6 +538,9 @@ contract SlashCommitmentFromOptInTester is UnitTestHelper {
 
         ISlasher.SignedCommitment memory signedCommitment =
             basicCommitment(params.committerSecretKey, params.slasher, "");
+
+        // skip past fraud proof window
+        vm.roll(block.number + registry.FRAUD_PROOF_WINDOW() + 1);
 
         // Opt in to slasher
         vm.startPrank(operator);
@@ -604,6 +579,9 @@ contract SlashCommitmentFromOptInTester is UnitTestHelper {
 
         ISlasher.SignedCommitment memory signedCommitment =
             basicCommitment(params.committerSecretKey, params.slasher, "");
+
+        // skip past fraud proof window
+        vm.roll(block.number + registry.FRAUD_PROOF_WINDOW() + 1);
 
         // Opt in to slasher
         vm.startPrank(operator);
@@ -671,6 +649,9 @@ contract SlashCommitmentFromOptInTester is UnitTestHelper {
         (address wrongCommitter, uint256 wrongCommitterKey) = makeAddrAndKey("wrongCommitter");
         ISlasher.SignedCommitment memory signedCommitment = basicCommitment(wrongCommitterKey, params.slasher, "");
 
+        // skip past fraud proof window
+        vm.roll(block.number + registry.FRAUD_PROOF_WINDOW() + 1);
+
         // Opt in to slasher
         vm.startPrank(operator);
         registry.optInToSlasher(result.registrationRoot, address(dummySlasher), committer);
@@ -701,6 +682,9 @@ contract SlashCommitmentFromOptInTester is UnitTestHelper {
 
         ISlasher.SignedCommitment memory signedCommitment =
             basicCommitment(params.committerSecretKey, params.slasher, "");
+
+        // skip past fraud proof window
+        vm.roll(block.number + registry.FRAUD_PROOF_WINDOW() + 1);
 
         // Opt in to slasher
         vm.startPrank(operator);

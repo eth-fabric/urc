@@ -113,6 +113,9 @@ contract Registry is IRegistry {
     /// @dev The function will revert if:
     /// @dev - The operator has not registered (NotRegisteredKey)
     /// @dev - The caller is not the operator's owner (WrongOperator)
+    /// @dev - The fraud proof window has not passed (FraudProofWindowNotMet)
+    /// @dev - The operator has already opted in (AlreadyOptedIn)
+    /// @dev - The opt-in delay has not passed (OptInDelayNotMet)
     /// @param registrationRoot The merkle root generated and stored from the register() function
     /// @param slasher The address of the Slasher contract to opt into
     /// @param committer The address of the key used for commitments
@@ -123,6 +126,11 @@ contract Registry is IRegistry {
         // Only the authorized owner can opt in
         if (operator.owner != msg.sender) {
             revert WrongOperator();
+        }
+
+        // Operator cannot opt in before the fraud proof window elapses
+        if (block.number < operator.registeredAt + FRAUD_PROOF_WINDOW) {
+            revert FraudProofWindowNotMet();
         }
 
         // Retrieve the SlasherCommitment struct
