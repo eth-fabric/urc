@@ -9,3 +9,4 @@ out/
 
 .env
 .cursorrules
+.DS_STORE
