@@ -1,6 +1,6 @@
 [profile.default]
 gas_reports=[]
-src = "src"
+src = "extensions"
 out = "out"
 libs = ["lib"]
 fs_permissions = [{ access = "read", path = "./" }]
