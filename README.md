@@ -56,4 +56,3 @@ See the [examples](./example/README.md) for reference implementations of Slasher
 
 ### License
 MIT + Apache-2.0
-
