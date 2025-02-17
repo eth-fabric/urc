@@ -1,4 +1,4 @@
-# Universal Registry Contract
+# Universal Registry Contract 
 
 **These standards are currently under review / feedback and are not audited.**
 
