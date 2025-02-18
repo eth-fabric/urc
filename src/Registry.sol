@@ -74,6 +74,11 @@ contract Registry is IRegistry {
         newOperator.unregisteredAt = type(uint32).max;
         newOperator.slashedAt = 0;
 
+        // Store the initial collateral value in the history
+        newOperator.collateralHistory.push(
+            CollateralRecord({ timestamp: uint64(block.timestamp), collateralValue: uint56(msg.value / 1 gwei) })
+        );
+
         emit OperatorRegistered(registrationRoot, uint56(msg.value / 1 gwei), owner);
     }
 
@@ -557,6 +562,12 @@ contract Registry is IRegistry {
         }
 
         operator.collateralGwei += uint56(msg.value / 1 gwei);
+
+        // Store the updated collateral value in the history
+        operator.collateralHistory.push(
+            CollateralRecord({ timestamp: uint64(block.timestamp), collateralValue: operator.collateralGwei })
+        );
+
         emit CollateralAdded(registrationRoot, operator.collateralGwei);
     }
 
@@ -626,6 +637,38 @@ contract Registry is IRegistry {
         }
 
         emit CollateralClaimed(registrationRoot, collateralGwei);
+    }
+
+    /// @notice Retrieves the historical collateral value for an operator at a given timestamp
+    /// @param registrationRoot The merkle root generated and stored from the register() function
+    /// @param timestamp The timestamp to retrieve the collateral value for
+    /// @return collateralGwei The collateral amount in GWEI at the closest recorded timestamp
+    function getHistoricalCollateral(bytes32 registrationRoot, uint256 timestamp)
+        external
+        view
+        returns (uint256 collateralGwei)
+    {
+        CollateralRecord[] storage records = registrations[registrationRoot].collateralHistory;
+        if (records.length == 0) {
+            return 0; // No history available
+        }
+
+        // Binary search for the closest timestamp less than the requested timestamp
+        uint256 low = 0;
+        uint256 high = records.length - 1;
+        uint256 closestCollateralValue = 0;
+
+        while (low <= high) {
+            uint256 mid = low + (high - low) / 2;
+            if (records[mid].timestamp < timestamp) {
+                closestCollateralValue = records[mid].collateralValue;
+                low = mid + 1;
+            } else {
+                high = mid - 1;
+            }
+        }
+
+        return closestCollateralValue;
     }
 
     /**

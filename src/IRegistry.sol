@@ -37,6 +37,8 @@ interface IRegistry {
         uint32 slashedAt;
         /// Mapping to track opt-in and opt-out status for proposer commitment protocols
         mapping(address slasher => SlasherCommitment) slasherCommitments;
+        /// Historical collateral records
+        CollateralRecord[] collateralHistory;
     }
 
     /// @notice A struct to track opt-in and opt-out status for proposer commitment protocols
@@ -47,6 +49,12 @@ interface IRegistry {
         uint64 optedOutAt;
         /// The address of the key used for commitments
         address committer;
+    }
+
+    /// @notice A record of collateral at a specific timestamp
+    struct CollateralRecord {
+        uint64 timestamp;
+        uint56 collateralValue;
     }
 
     enum SlashingType {
