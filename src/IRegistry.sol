@@ -53,8 +53,8 @@ interface IRegistry {
 
     /// @notice A record of collateral at a specific timestamp
     struct CollateralRecord {
-        uint256 timestamp;
-        uint256 collateralValue;
+        uint64 timestamp;
+        uint56 collateralValue;
     }
 
     enum SlashingType {

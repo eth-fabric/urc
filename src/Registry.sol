@@ -653,14 +653,14 @@ contract Registry is IRegistry {
             return 0; // No history available
         }
 
-        // Binary search for the closest timestamp less than or equal to the requested timestamp
+        // Binary search for the closest timestamp less than the requested timestamp
         uint256 low = 0;
         uint256 high = records.length - 1;
         uint256 closestCollateralValue = 0;
 
         while (low <= high) {
             uint256 mid = low + (high - low) / 2;
-            if (records[mid].timestamp <= timestamp) {
+            if (records[mid].timestamp < timestamp) {
                 closestCollateralValue = records[mid].collateralValue;
                 low = mid + 1;
             } else {
