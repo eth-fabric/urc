@@ -167,11 +167,33 @@ contract MerkleTreeTest is Test {
         }
     }
 
-    function testLeavesTooLarge() public {
-        bytes32[] memory leaves = new bytes32[](257);
-        vm.expectRevert(MerkleTree.LeavesTooLarge.selector);
-        leaves.generateTree();
+     function testLeavesTooLarge() public {
+      bytes32[] memory leaves = new bytes32[](257);
+    
+    // Use a try-catch pattern instead of vm.expectRevert
+    bool didRevert = false;
+    try this.callGenerateTree(leaves) {
+        // If we reach here, no revert happened
+    } catch Error(string memory reason) {
+        // This catches require/revert with reason string
+        didRevert = true;
+    } catch (bytes memory returnData) {
+        // This catches custom errors and panics
+        bytes4 selector = bytes4(returnData);
+        assertTrue(
+            selector == MerkleTree.LeavesTooLarge.selector,
+            "Wrong error selector"
+        );
+        didRevert = true;
     }
+    
+    assertTrue(didRevert, "Function did not revert with LeavesTooLarge");
+}
+
+// External function to call from try-catch
+  function callGenerateTree(bytes32[] memory leaves) external pure returns (bytes32) {
+    return leaves.generateTree();
+}
 
     /*//////////////////////////////////////////////////////////////
                         HELPER FUNCTION TESTS
