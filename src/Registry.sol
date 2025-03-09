@@ -522,6 +522,11 @@ contract Registry is IRegistry {
 
         slashAmountGwei = MIN_COLLATERAL / 1 gwei;
 
+         // Prevent slashing more than the operator's collateral
+        if (slashAmountGwei > collateralGwei) {
+            revert SlashAmountExceedsCollateral();
+        }
+
         // Decrement operator's collateral
         operator.collateralGwei -= uint56(slashAmountGwei);
 
