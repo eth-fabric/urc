@@ -76,7 +76,7 @@ library BLS {
         }
 
         // G1MSM address is 0x0d
-        (bool success, bytes memory output) = address(0x0d).staticcall(input);
+        (bool success, bytes memory output) = address(0x0c).staticcall(input);
         require(success, "G1MSM failed");
         return abi.decode(output, (G1Point));
     }
@@ -87,7 +87,7 @@ library BLS {
     /// @return result Resulted G2 point
     function G2Add(G2Point memory a, G2Point memory b) internal view returns (G2Point memory result) {
         // G2ADD address is 0x0e
-        (bool success, bytes memory output) = address(0x0e).staticcall(abi.encode(a, b));
+        (bool success, bytes memory output) = address(0x0d).staticcall(abi.encode(a, b));
         require(success, "G2ADD failed");
         return abi.decode(output, (G2Point));
     }
@@ -98,7 +98,7 @@ library BLS {
     /// @return result Resulted G2 point
     function G2Mul(G2Point memory point, uint256 scalar) internal view returns (G2Point memory result) {
         // G2MUL address is 0x0f
-        (bool success, bytes memory output) = address(0x0f).staticcall(abi.encode(point, scalar));
+        (bool success, bytes memory output) = address(0x0e).staticcall(abi.encode(point, scalar));
         require(success, "G2MUL failed");
         return abi.decode(output, (G2Point));
     }
@@ -115,7 +115,7 @@ library BLS {
         }
 
         // G2MSM address is 0x10
-        (bool success, bytes memory output) = address(0x10).staticcall(input);
+        (bool success, bytes memory output) = address(0x0e).staticcall(input);
         require(success, "G2MSM failed");
         return abi.decode(output, (G2Point));
     }
@@ -131,7 +131,7 @@ library BLS {
         }
 
         // PAIRING address is 0x11
-        (bool success, bytes memory output) = address(0x11).staticcall(input);
+        (bool success, bytes memory output) = address(0x0f).staticcall(input);
         require(success, "Pairing failed");
         return abi.decode(output, (bool));
     }
@@ -141,7 +141,7 @@ library BLS {
     /// @return result Resulted G1 point
     function MapFpToG1(Fp memory element) internal view returns (G1Point memory result) {
         // MAP_FP_TO_G1 address is 0x12
-        (bool success, bytes memory output) = address(0x12).staticcall(abi.encode(element));
+        (bool success, bytes memory output) = address(0x10).staticcall(abi.encode(element));
         require(success, "MAP_FP_TO_G1 failed");
         return abi.decode(output, (G1Point));
     }
@@ -151,7 +151,7 @@ library BLS {
     /// @return result Resulted G2 point
     function MapFp2ToG2(Fp2 memory element) internal view returns (G2Point memory result) {
         // MAP_FP2_TO_G2 address is 0x13
-        (bool success, bytes memory output) = address(0x13).staticcall(abi.encode(element));
+        (bool success, bytes memory output) = address(0x11).staticcall(abi.encode(element));
         require(success, "MAP_FP2_TO_G2 failed");
         return abi.decode(output, (G2Point));
     }
