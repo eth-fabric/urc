@@ -17,6 +17,9 @@ contract Registry is IRegistry {
     /// @notice Mapping to track if a slashing has occurred before with same input
     mapping(bytes32 slashingDigest => bool) public slashedBefore;
 
+    /// @notice Mapping to track if a slot has been slashed for equivocation
+    mapping(uint64 slot => bool) public slashedSlots;
+
     // Constants
     uint256 public constant MIN_COLLATERAL = 0.1 ether;
     uint256 public constant UNREGISTRATION_DELAY = 7200; // 1 day
@@ -332,6 +335,14 @@ contract Registry is IRegistry {
             revert UnauthorizedCommitment();
         }
 
+        // Save timestamp only once to start the slash window
+        if (operator.slashedAt == 0) {
+            operator.slashedAt = uint32(block.number);
+        }
+
+        // Prevent same slashing from occurring again
+        slashedBefore[slashingDigest] = true;
+
         // Call the Slasher contract to slash the operator
         slashAmountGwei = ISlasher(commitment.commitment.slasher).slash(
             delegation.delegation, commitment.commitment, evidence, msg.sender
@@ -342,19 +353,11 @@ contract Registry is IRegistry {
             revert SlashAmountExceedsCollateral();
         }
 
-        // Burn the slashed amount
-        _burnGwei(slashAmountGwei);
-
-        // Save timestamp only once to start the slash window
-        if (operator.slashedAt == 0) {
-            operator.slashedAt = uint32(block.number);
-        }
-
         // Decrement operator's collateral
         operator.collateralGwei -= uint56(slashAmountGwei);
 
-        // Prevent same slashing from occurring again
-        slashedBefore[slashingDigest] = true;
+        // Burn the slashed amount
+        _burnGwei(slashAmountGwei);
 
         emit OperatorSlashed(
             SlashingType.Commitment,
@@ -418,6 +421,14 @@ contract Registry is IRegistry {
             revert UnauthorizedCommitment();
         }
 
+        // Save timestamp only once to start the slash window
+        if (operator.slashedAt == 0) {
+            operator.slashedAt = uint32(block.number);
+        }
+
+        // Prevent same slashing from occurring again
+        delete operator.slasherCommitments[slasher];
+
         // Call the Slasher contract to slash the operator
         slashAmountGwei = ISlasher(slasher).slashFromOptIn(commitment.commitment, evidence, msg.sender);
 
@@ -426,23 +437,15 @@ contract Registry is IRegistry {
             revert SlashAmountExceedsCollateral();
         }
 
-        // Save timestamp only once to start the slash window
-        if (operator.slashedAt == 0) {
-            operator.slashedAt = uint32(block.number);
-        }
-
         // Decrement operator's collateral
         operator.collateralGwei -= uint56(slashAmountGwei);
 
-        // Prevent same slashing from occurring again
-        delete operator.slasherCommitments[slasher];
+        // Burn the slashed amount
+        _burnGwei(slashAmountGwei);
 
         emit OperatorSlashed(
             SlashingType.Commitment, registrationRoot, operator.owner, msg.sender, slasher, slashAmountGwei
         );
-
-        // Burn the slashed amount
-        _burnGwei(slashAmountGwei);
     }
 
     /// @notice Slash an operator for equivocation (signing two different delegations for the same slot)
@@ -473,14 +476,23 @@ contract Registry is IRegistry {
 
         bytes32 slashingDigest = keccak256(abi.encode(delegationOne, delegationTwo, registrationRoot));
 
-        // Verify the delegations are not identical
-        if (keccak256(abi.encode(delegationOne)) == keccak256(abi.encode(delegationTwo))) {
+        // Verify the delegations are not identical by comparing only essential fields
+        if (
+            delegationOne.delegation.slot == delegationTwo.delegation.slot &&
+            keccak256(abi.encode(delegationOne.delegation.delegate)) == keccak256(abi.encode(delegationTwo.delegation.delegate)) &&
+            delegationOne.delegation.committer == delegationTwo.delegation.committer
+        ) {
             revert DelegationsAreSame();
         }
 
         // Prevent duplicate slashing with same inputs
         if (slashedBefore[slashingDigest]) {
             revert SlashingAlreadyOccurred();
+        }
+
+        // Prevent slashing a slot that has already been slashed
+        if (slashedSlots[delegationOne.delegation.slot]) {
+            revert SlotAlreadySlashed();
         }
 
         // Operator is not liable for slashings before the fraud proof window elapses
@@ -502,13 +514,8 @@ contract Registry is IRegistry {
         }
 
         // Verify both delegations were signed by the operator's BLS key
-        if (_verifyDelegation(registrationRoot, registrationSignature, proof, leafIndex, delegationOne) == 0) {
-            revert InvalidDelegation();
-        }
-        // error if either delegation is invalid
-        if (_verifyDelegation(registrationRoot, registrationSignature, proof, leafIndex, delegationTwo) == 0) {
-            revert InvalidDelegation();
-        }
+        _verifyDelegation(registrationRoot, registrationSignature, proof, leafIndex, delegationOne);
+        _verifyDelegation(registrationRoot, registrationSignature, proof, leafIndex, delegationTwo);
 
         // Verify the delegations are for the same slot
         if (delegationOne.delegation.slot != delegationTwo.delegation.slot) {
@@ -528,14 +535,14 @@ contract Registry is IRegistry {
         // Prevent same slashing from occurring again
         slashedBefore[slashingDigest] = true;
 
-        // Save the perumutation to prevent duplicate slashings with the same pair of Delegations
+        // Save the permutation to prevent duplicate slashings with the same pair of Delegations
         slashedBefore[keccak256(abi.encode(delegationTwo, delegationOne, registrationRoot))] = true;
 
-        // Reward the challenger
-        (bool success,) = msg.sender.call{ value: MIN_COLLATERAL }("");
-        if (!success) {
-            revert EthTransferFailed();
-        }
+        // Mark this slot as slashed to prevent future slashings
+        slashedSlots[delegationOne.delegation.slot] = true;
+
+        // Burn the slashed amount instead of transferring to challenger
+        _burnGwei(slashAmountGwei);
 
         emit OperatorSlashed(
             SlashingType.Equivocation, registrationRoot, operator.owner, msg.sender, address(this), slashAmountGwei
