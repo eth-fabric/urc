@@ -850,6 +850,6 @@ contract Registry is IRegistry, ReentrancyGuard {
     
     (bool success,) = msg.sender.call{ value: refundAmount }("");
     require(success, "Refund transfer failed");
-}
+   }
 
 }
