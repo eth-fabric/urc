@@ -22,11 +22,8 @@ contract Registry is IRegistry, ReentrancyGuard {
     /// @notice Mapping to track if a slashing has occurred before with same input
     mapping(bytes32 slashingDigest => bool) public slashedBefore;
 
-       // Add a mapping for pending refunds
+    // Add a mapping for pending refunds
     mapping(address => uint256) public pendingRefunds;
-    
-
-
 
     /// @notice Mapping to track if a slot has been slashed for equivocation
     mapping(uint64 slot => bool) public slashedSlots;
@@ -65,7 +62,7 @@ contract Registry is IRegistry, ReentrancyGuard {
        
         require (owner != address(0), "invalid owner address" );
 
-       // At least MIN_COLLATERAL for sufficient reward for fraud/equivocation challenges
+        // At least MIN_COLLATERAL for sufficient reward for fraud/equivocation challenges
         if (msg.value < MIN_COLLATERAL) {
             revert InsufficientCollateral();
         }
@@ -271,20 +268,14 @@ contract Registry is IRegistry, ReentrancyGuard {
             revert EthTransferFailed();
         }
 
-      
-
-       // Store refund for later claiming
+        // Store refund for later claiming
         pendingRefunds[owner] += remainingWei;
-        
 
         emit OperatorSlashed(SlashingType.Fraud, registrationRoot, owner, msg.sender, address(this), MIN_COLLATERAL);
 
         // Return a value for the caller to use
         return MIN_COLLATERAL;
     }
-
-
-
 
     /// @notice Slashes an operator for breaking a commitment
     /// @dev The function verifies `proof` to first ensure the operator's BLS key is in the registry, then verifies the `signedDelegation` was signed by the same key. If the fraud proof window has passed, the URC will call the `slash()` function of the Slasher contract specified in the `signedCommitment`. The Slasher contract will determine if the operator has broken a commitment and return the amount of GWEI to be slashed at the URC.
@@ -314,7 +305,6 @@ contract Registry is IRegistry, ReentrancyGuard {
         ISlasher.SignedCommitment calldata commitment,
         bytes calldata evidence
     ) external nonReentrant returns (uint256 slashAmountGwei) {
-        // CHECKS
         Operator storage operator = registrations[registrationRoot];
 
         bytes32 slashingDigest = keccak256(abi.encode(delegation, commitment, registrationRoot));
@@ -352,7 +342,6 @@ contract Registry is IRegistry, ReentrancyGuard {
             revert UnauthorizedCommitment();
         }
 
-        // EFFECTS
         // Save timestamp only once to start the slash window
         if (operator.slashedAt == 0) {
             operator.slashedAt = uint32(block.number);
@@ -361,7 +350,6 @@ contract Registry is IRegistry, ReentrancyGuard {
         // Prevent same slashing from occurring again
         slashedBefore[slashingDigest] = true;
 
-        // INTERACTIONS
         // Call the Slasher contract to slash the operator
         slashAmountGwei = ISlasher(commitment.commitment.slasher).slash(
             delegation.delegation, commitment.commitment, evidence, msg.sender
@@ -851,7 +839,7 @@ contract Registry is IRegistry, ReentrancyGuard {
     }
 
 
-    // New function for claiming refunds
+   // New function for claiming refunds
    function claimRefund() external nonReentrant {
     uint256 refundAmount = pendingRefunds[msg.sender];
     require(refundAmount > 0, "No refund available");
