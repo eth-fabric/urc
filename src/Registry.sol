@@ -671,8 +671,6 @@ contract Registry is IRegistry {
             address(this),
             pendingSlash.slashAmountWei
         );
-
-        return slashAmountWei;
     }
 
     /**

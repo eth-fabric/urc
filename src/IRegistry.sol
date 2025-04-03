@@ -108,9 +108,9 @@ interface IRegistry {
     );
 
     /// @notice Emitted when a slash event is queued
-    /// @param registrationRoot
-    /// @param slashType
-    /// @param slashAmount
+    /// @param registrationRoot the registration root
+    /// @param slashType the type of slashing. One of: Fraud, Equivocation, Commitment
+    /// @param slashAmount the amount to be slashed
     event SlashQueued(bytes32 registrationRoot, SlashingType slashType, uint256 slashAmount);
 
     /// @notice Emitted when an operator is unregistered
@@ -153,7 +153,6 @@ interface IRegistry {
     error SlashWaitingPeriodNotMet();
     error InsufficientCollateral();
     error OperatorAlreadyRegistered();
-    error OperatorDeleted();
     error InvalidRegistrationRoot();
     error EthTransferFailed();
     error WrongOperator();
@@ -180,7 +179,6 @@ interface IRegistry {
     error DifferentSlots();
     error DelegationsAreSame();
     error OperatorAlreadyEquivocated();
-    error TimestampTooOld();
     error AlreadyOptedIn();
     error NotOptedIn();
     error OptInDelayNotMet();
