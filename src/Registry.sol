@@ -363,7 +363,8 @@ contract Registry is IRegistry {
         // Verify the delegation was signed by the operator's BLS key
         // This is a sanity check to ensure the delegation is valid
 
-        _verifyDelegation(registrationRoot, registrationSignature, proof, leafIndex, delegation, operator.owner);
+        uint256 collateralWei =
+                        _verifyDelegation(registrationRoot, registrationSignature, proof, leafIndex, delegation, operator.owner);
 
         // Verify the commitment was signed by the commitment key from the Delegation
         address committer = ECDSA.recover(keccak256(abi.encode(commitment.commitment)), commitment.signature);
