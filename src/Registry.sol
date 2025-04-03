@@ -84,21 +84,19 @@ contract Registry is IRegistry {
         // Each Operator is mapped to a unique registration root
         Operator storage newOperator = registrations[registrationRoot];
         newOperator.owner = owner;
-
-        newOperator.collateralWei = uint80(msg.value / 1 wei);
-        newOperator.numKeys = uint8(regs.length);
-        newOperator.registeredAt = uint32(block.number);
-        newOperator.unregisteredAt = type(uint32).max;
+        newOperator.collateralWei = uint80(msg.value);
+        newOperator.numKeys = uint16(regs.length);
+        newOperator.registeredAt = uint48(block.number);
+        newOperator.unregisteredAt = type(uint48).max;
 
         newOperator.slashedAt = 0;
 
         // Store the initial collateral value in the history
         newOperator.collateralHistory.push(
-
-            CollateralRecord({ timestamp: uint64(block.timestamp), collateralValue: uint80(msg.value / 1 wei) })
+            CollateralRecord({ timestamp: uint64(block.timestamp), collateralValue: uint80(msg.value) })
         );
 
-        emit OperatorRegistered(registrationRoot, uint80(msg.value / 1 wei), owner);
+        emit OperatorRegistered(registrationRoot, msg.value, owner);
 
     }
 
@@ -246,7 +244,7 @@ contract Registry is IRegistry {
     /// @param reg The fraudulent Registration
     /// @param proof The merkle proof to verify the operator's key is in the registry
     /// @param leafIndex The index of the leaf in the merkle tree
-    /// @return slashedCollateralWei The amount of Wei slashed
+    /// @return slashedCollateralWei The amount of WEI slashed
     function slashRegistration(
         bytes32 registrationRoot,
         Registration calldata reg,
@@ -268,13 +266,11 @@ contract Registry is IRegistry {
         }
 
         // Verify the registration is part of the registry
-
-        uint256 verifiedCollateralWei =
+        uint256 verifiedCollateralGwei =
             _verifyMerkleProof(registrationRoot, keccak256(abi.encode(reg, owner)), proof, leafIndex);
 
         // 0 collateral implies the registration was not part of the registry
-        if (verifiedCollateralWei == 0) {
-
+        if (verifiedCollateralGwei == 0) {
             revert NotRegisteredKey();
         }
 
