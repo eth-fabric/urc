@@ -150,8 +150,8 @@ interface IRegistry {
     error NoSlashPending();
     error SlashWaitingPeriodNotMet();
     error InsufficientCollateral();
-    error OperatorDeleted();
     error OperatorAlreadyRegistered();
+    error OperatorDeleted();
     error InvalidRegistrationRoot();
     error EthTransferFailed();
     error WrongOperator();
@@ -177,8 +177,8 @@ interface IRegistry {
     error InvalidDelegation();
     error DifferentSlots();
     error DelegationsAreSame();
-    error TimestampTooOld();
     error OperatorAlreadyEquivocated();
+    error TimestampTooOld();
     error AlreadyOptedIn();
     error NotOptedIn();
     error OptInDelayNotMet();
