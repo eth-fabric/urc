@@ -280,6 +280,11 @@ contract Registry is IRegistry {
             revert FraudProofChallengeInvalid();
         }
 
+        // Save timestamp only once to start the slash window
+        if (operator.slashedAt == 0) {
+            operator.slashedAt = uint48(block.number);
+        }
+
         // Calculate the reward amount for the challenger
         uint256 challengerReward = MIN_COLLATERAL;
 
@@ -700,11 +705,11 @@ contract Registry is IRegistry {
             revert NotRegisteredKey();
         }
 
-        if (msg.value / 1 wei > type(uint80).max) {
+        if (msg.value > type(uint80).max) {
             revert CollateralOverflow();
         }
 
-        operator.collateralWei += uint80(msg.value / 1 wei);
+        operator.collateralWei += uint80(msg.value);
 
         // Store the updated collateral value in the history
         operator.collateralHistory.push(
@@ -755,7 +760,6 @@ contract Registry is IRegistry {
         }
 
         // Clear operator info
-
         operator.deleted = true;
 
         // Transfer to operator
@@ -803,7 +807,6 @@ contract Registry is IRegistry {
         }
 
         // Delete the operator
-
         operator.deleted = true;
 
         // Transfer collateral to owner
@@ -946,7 +949,6 @@ contract Registry is IRegistry {
 
         // Create leaf nodes by hashing Registration structs
         for (uint256 i = 0; i < regs.length; i++) {
-            emit KeyRegistered(i, regs[i], leaves[i]);
             leaves[i] = keccak256(abi.encode(regs[i], owner));
         }
 

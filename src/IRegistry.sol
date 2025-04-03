@@ -91,12 +91,6 @@ interface IRegistry {
     /// @param owner The owner of the operator
     event OperatorRegistered(bytes32 indexed registrationRoot, uint256 collateralWei, address owner);
 
-    /// @notice Emitted when a BLS key is registered
-    /// @param leafIndex The index of the BLS key in the registration merkle tree
-    /// @param reg The registration
-    /// @param leaf The leaf hash value of the `Registration`
-    event KeyRegistered(uint256 leafIndex, Registration reg, bytes32 leaf);
-
     /// @notice Emitted when an operator is slashed for fraud, equivocation, or breaking a commitment
     /// @param registrationRoot The merkle root of the registration merkle tree
     /// @param owner The owner of the operator
