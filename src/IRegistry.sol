@@ -25,7 +25,7 @@ interface IRegistry {
     struct Operator {
         /// The authorized address of the operator
         address owner;
-        /// ETH collateral in Wei
+        /// ETH collateral in WEI
         uint80 collateralWei;
         /// The number of keys registered per operator
         uint16 numKeys;
