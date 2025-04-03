@@ -822,9 +822,7 @@ contract Registry is IRegistry {
     /// @notice Retrieves the historical collateral value for an operator at a given timestamp
     /// @param registrationRoot The merkle root generated and stored from the register() function
     /// @param timestamp The timestamp to retrieve the collateral value for
-
-    /// @return collateralWei The collateral amount in Wei at the closest recorded timestamp
-
+    /// @return collateralWei The collateral amount in WEI at the closest recorded timestamp
     function getHistoricalCollateral(bytes32 registrationRoot, uint256 timestamp)
         external
         view
@@ -948,7 +946,6 @@ contract Registry is IRegistry {
         // Create leaf nodes by hashing Registration structs
         for (uint256 i = 0; i < regs.length; i++) {
             emit KeyRegistered(i, regs[i], leaves[i]);
-
             leaves[i] = keccak256(abi.encode(regs[i], owner));
         }
 
@@ -982,9 +979,7 @@ contract Registry is IRegistry {
     /// @param proof The merkle proof to verify the operator's key is in the registry
     /// @param leafIndex The index of the leaf in the merkle tree
     /// @param delegation The SignedDelegation signed by the operator's BLS key
-
-    /// @return collateralWei The collateral amount in Wei
-
+    /// @return collateralWei The collateral amount in WEI
     function _verifyDelegation(
         bytes32 registrationRoot,
         BLS.G2Point calldata registrationSignature,
@@ -1014,9 +1009,7 @@ contract Registry is IRegistry {
 
     /// @notice Burns ether
     /// @dev The function will revert if the transfer to the BURNER_ADDRESS fails.
-
-    /// @param amountWei The amount of Wei to be burned
-
+    /// @param amountWei The amount of WEI to be burned
     function _burnETH(uint256 amountWei) internal {
         // Burn the slash amount
         bool success;
