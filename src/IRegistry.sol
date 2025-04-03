@@ -97,7 +97,6 @@ interface IRegistry {
     /// @param leaf The leaf hash value of the `Registration`
     event KeyRegistered(uint256 leafIndex, Registration reg, bytes32 leaf);
 
-
     /// @notice Emitted when an operator is slashed for fraud, equivocation, or breaking a commitment
     /// @param registrationRoot The merkle root of the registration merkle tree
     /// @param owner The owner of the operator

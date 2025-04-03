@@ -88,7 +88,6 @@ contract Registry is IRegistry {
         newOperator.numKeys = uint16(regs.length);
         newOperator.registeredAt = uint48(block.number);
         newOperator.unregisteredAt = type(uint48).max;
-
         newOperator.slashedAt = 0;
 
         // Store the initial collateral value in the history
@@ -97,7 +96,6 @@ contract Registry is IRegistry {
         );
 
         emit OperatorRegistered(registrationRoot, msg.value, owner);
-
     }
 
     /// @notice Starts the process to unregister an operator from the URC
@@ -282,7 +280,6 @@ contract Registry is IRegistry {
             revert FraudProofChallengeInvalid();
         }
 
-
         // Calculate the reward amount for the challenger
         uint256 challengerReward = MIN_COLLATERAL;
 
@@ -300,7 +297,6 @@ contract Registry is IRegistry {
         emit OperatorSlashed(SlashingType.Fraud, registrationRoot, owner, msg.sender, address(this), challengerReward);
 
         return challengerReward;
-
     }
 
     /// @notice Slashes an operator for breaking a commitment
@@ -322,7 +318,7 @@ contract Registry is IRegistry {
     /// @param delegation The SignedDelegation signed by the operator's BLS key
     /// @param commitment The SignedCommitment signed by the delegate's ECDSA key
     /// @param evidence Arbitrary evidence to slash the operator, required by the Slasher contract
-    /// @return slashAmountWei The amount of Wei slashed
+    /// @return slashAmountWei The amount of WEI slashed
     function slashCommitment(
         bytes32 registrationRoot,
         BLS.G2Point calldata registrationSignature,
@@ -333,7 +329,6 @@ contract Registry is IRegistry {
         bytes calldata evidence
     ) external returns (uint256 slashAmountWei) {
         Operator storage operator = registrations[registrationRoot];
-
 
         // Prevent reusing a deleted operator
         if (operator.deleted) {
@@ -370,20 +365,17 @@ contract Registry is IRegistry {
 
         uint256 collateralWei = _verifyDelegation(registrationRoot, registrationSignature, proof, leafIndex, delegation);
 
-
         // Verify the commitment was signed by the commitment key from the Delegation
         address committer = ECDSA.recover(keccak256(abi.encode(commitment.commitment)), commitment.signature);
         if (committer != delegation.delegation.committer) {
             revert UnauthorizedCommitment();
         }
 
-
         // Save timestamp only once to start the slash window - MOVED BEFORE EXTERNAL CALL
 
         if (operator.slashedAt == 0) {
             operator.slashedAt = uint32(block.number);
         }
-
 
         // Prevent same slashing from occurring again - MOVED BEFORE EXTERNAL CALL
 
@@ -398,7 +390,6 @@ contract Registry is IRegistry {
         if (slashAmountWei > collateralWei) {
             revert SlashAmountExceedsCollateral();
         }
-
 
         // Decrement operator's collateral - MOVED BEFORE BURNING
 
@@ -482,7 +473,6 @@ contract Registry is IRegistry {
             operator.slashedAt = uint32(block.number);
         }
 
-
         // Delete the slasher commitment before external call to prevent reentrancy
 
         delete operator.slasherCommitments[slasher];
@@ -507,7 +497,6 @@ contract Registry is IRegistry {
         if (!success) {
             revert EthTransferFailed();
         }
-
 
         emit OperatorSlashed(
             SlashingType.Commitment, registrationRoot, operator.owner, msg.sender, slasher, slashAmountWei
@@ -535,7 +524,6 @@ contract Registry is IRegistry {
     /// @return slashAmountWei The amount of WEI slashed
     /// @notice Slash an operator for equivocation (signing two different delegations for the same slot)
     /// @dev The function will queue a slash request with waiting period instead of executing immediately
-
     function slashEquivocation(
         bytes32 registrationRoot,
         BLS.G2Point calldata registrationSignature,
@@ -550,7 +538,6 @@ contract Registry is IRegistry {
         if (operator.deleted) {
             revert OperatorDeleted();
         }
-
 
         bytes32 slashingDigest = keccak256(abi.encode(delegationOne, delegationTwo, registrationRoot));
         bytes32 reversedSlashingDigest = keccak256(abi.encode(delegationTwo, delegationOne, registrationRoot));
@@ -568,7 +555,6 @@ contract Registry is IRegistry {
         // Prevent duplicate slashing with same inputs
         if (slashedBefore[slashingDigest] || slashedBefore[reversedSlashingDigest]) {
             revert SlashingAlreadyOccurred();
-
         }
 
         // Prevent slashing a slot that has already been slashed
@@ -596,12 +582,10 @@ contract Registry is IRegistry {
         _verifyDelegation(registrationRoot, registrationSignature, proof, leafIndex, delegationOne);
         _verifyDelegation(registrationRoot, registrationSignature, proof, leafIndex, delegationTwo);
 
-
         // Verify the delegations are for the same slot
         if (delegationOne.delegation.slot != delegationTwo.delegation.slot) {
             revert DifferentSlots();
         }
-
 
         // Calculate slash amount as percentage of collateral (15%) instead of fixed amount
         slashAmountWei = operator.collateralWei * 15 / 100;
@@ -647,12 +631,10 @@ contract Registry is IRegistry {
             revert SlashWaitingPeriodNotMet();
         }
 
-
         // Save timestamp only once to start the slash window
         if (operator.slashedAt == 0) {
             operator.slashedAt = uint48(block.number);
         }
-
 
         // Mark this slot as slashed to prevent future slashings
         slashedSlots[pendingSlash.slotId] = true;
@@ -673,19 +655,16 @@ contract Registry is IRegistry {
             revert EthTransferFailed();
         }
 
-
         // Burn the rest
         _burnETH(burnAmount / 1 wei);
 
         emit OperatorSlashed(
-
             SlashingType.Equivocation,
             registrationRoot,
             operator.owner,
             pendingSlash.reporter,
             address(this),
             pendingSlash.slashAmountWei
-
         );
 
         return slashAmountWei;
@@ -698,9 +677,11 @@ contract Registry is IRegistry {
      */
 
     /// @notice Adds collateral to an Operator struct
-
+    /// @dev The function will revert if:
+    /// @dev - The operator was deleted (OperatorDeleted)
+    /// @dev - The operator has not registered (NotRegisteredKey)
+    /// @dev - The collateral amount overflows the `collateralGwei` field (CollateralOverflow)
     /// @dev The function will revert if the operator does not exist or if the collateral amount overflows the `collateralWei` field.
-
     /// @param registrationRoot The merkle root generated and stored from the register() function
     function addCollateral(bytes32 registrationRoot) external payable {
         Operator storage operator = registrations[registrationRoot];
@@ -710,24 +691,20 @@ contract Registry is IRegistry {
             revert OperatorDeleted();
         }
 
-
         // Add dust check
         if (msg.value % 1 wei != 0) {
             revert DustAmountNotAllowed();
         }
 
-
         if (operator.collateralWei == 0) {
             revert NotRegisteredKey();
         }
-
 
         if (msg.value / 1 wei > type(uint80).max) {
             revert CollateralOverflow();
         }
 
         operator.collateralWei += uint80(msg.value / 1 wei);
-
 
         // Store the updated collateral value in the history
         operator.collateralHistory.push(
@@ -777,7 +754,6 @@ contract Registry is IRegistry {
             revert NoCollateralToClaim();
         }
 
-
         // Clear operator info
 
         operator.deleted = true;
@@ -811,12 +787,10 @@ contract Registry is IRegistry {
         address owner = operator.owner;
         uint256 collateralWei = operator.collateralWei;
 
-
         // Prevent reusing a deleted operator
         if (operator.deleted) {
             revert OperatorDeleted();
         }
-
 
         // Check that they've been slashed
         if (operator.slashedAt == 0) {
@@ -828,7 +802,6 @@ contract Registry is IRegistry {
             revert SlashWindowNotMet();
         }
 
-
         // Delete the operator
 
         operator.deleted = true;
@@ -838,7 +811,6 @@ contract Registry is IRegistry {
         assembly ("memory-safe") {
             success := call(gas(), owner, collateralWei, 0, 0, 0, 0)
         }
-
 
         if (!success) {
             revert EthTransferFailed();
@@ -898,9 +870,7 @@ contract Registry is IRegistry {
     /// @param leaf The leaf to verify
     /// @param proof The merkle proof to verify the operator's key is in the registry
     /// @param leafIndex The index of the leaf in the merkle tree
-
-    /// @return collateralWei The collateral amount in Wei
-
+    /// @return collateralWei The collateral amount in WEI
     function verifyMerkleProof(bytes32 registrationRoot, bytes32 leaf, bytes32[] calldata proof, uint256 leafIndex)
         external
         view
@@ -944,9 +914,7 @@ contract Registry is IRegistry {
     /// @param leafIndex The index of the leaf in the merkle tree
     /// @param slasher The address of the slasher to check
     /// @return slasherCommitment The slasher commitment (default values if not opted in)
-
-    /// @return collateralWei The collateral amount in Wei (0 if not opted in)
-
+    /// @return collateralWei The collateral amount in WEI (0 if not opted in)
     function getOptedInCommitter(
         bytes32 registrationRoot,
         Registration calldata reg,
@@ -972,8 +940,6 @@ contract Registry is IRegistry {
     /// @return registrationRoot The merkle root of the registration
     function _merkleizeRegistrationsWithOwner(Registration[] calldata regs, address owner)
         internal
-
-
         returns (bytes32 registrationRoot)
     {
         // Create leaves array with padding
@@ -981,7 +947,6 @@ contract Registry is IRegistry {
 
         // Create leaf nodes by hashing Registration structs
         for (uint256 i = 0; i < regs.length; i++) {
-
             emit KeyRegistered(i, regs[i], leaves[i]);
 
             leaves[i] = keccak256(abi.encode(regs[i], owner));
@@ -997,9 +962,7 @@ contract Registry is IRegistry {
     /// @param leaf The leaf to verify
     /// @param proof The merkle proof to verify the operator's key is in the registry
     /// @param leafIndex The index of the leaf in the merkle tree
-
-    /// @return collateralWei The collateral amount in Wei
-
+    /// @return collateralWei The collateral amount in WEI
     function _verifyMerkleProof(bytes32 registrationRoot, bytes32 leaf, bytes32[] calldata proof, uint256 leafIndex)
         internal
         view
@@ -1027,7 +990,6 @@ contract Registry is IRegistry {
         BLS.G2Point calldata registrationSignature,
         bytes32[] calldata proof,
         uint256 leafIndex,
-
         ISlasher.SignedDelegation calldata delegation
     ) internal view returns (uint256 collateralWei) {
         // Reconstruct leaf using pubkey in SignedDelegation to check equivalence
@@ -1035,7 +997,6 @@ contract Registry is IRegistry {
         Registration memory reg =
             Registration({ pubkey: delegation.delegation.proposer, signature: registrationSignature });
         bytes32 leaf = keccak256(abi.encode(reg));
-
 
         collateralWei = _verifyMerkleProof(registrationRoot, leaf, proof, leafIndex);
 
