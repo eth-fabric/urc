@@ -26,7 +26,7 @@ interface IRegistry {
         /// The authorized address of the operator
         address owner;
         /// ETH collateral in Wei
-        uint56 collateralWei;
+        uint80 collateralWei;
         /// The number of keys registered per operator (capped at 255)
         uint8 numKeys;
         /// The block number when registration occurred
@@ -35,6 +35,8 @@ interface IRegistry {
         uint32 unregisteredAt;
         /// The block number when slashed from breaking a commitment
         uint32 slashedAt;
+        /// A field to simulate deletion of the operator, since deleting a struct with a nested mapping is not safe
+        bool deleted;
         /// Mapping to track opt-in and opt-out status for proposer commitment protocols
         mapping(address slasher => SlasherCommitment) slasherCommitments;
         /// Historical collateral records
@@ -65,7 +67,7 @@ interface IRegistry {
     /// @notice A record of collateral at a specific timestamp
     struct CollateralRecord {
         uint64 timestamp;
-        uint56 collateralValue;
+        uint80 collateralValue;
     }
 
     enum SlashingType {
@@ -144,6 +146,7 @@ interface IRegistry {
      *                                *
      *
      */
+    error OperatorDeleted();
     error TimestampTooOld();
     error SlotAlreadySlashed();
     error DustAmountNotAllowed();
