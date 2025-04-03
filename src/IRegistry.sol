@@ -145,13 +145,12 @@ interface IRegistry {
      *                                *
      *
      */
-    error OperatorDeleted();
-    error TimestampTooOld();
     error SlotAlreadySlashed();
     error DustAmountNotAllowed();
     error NoSlashPending();
     error SlashWaitingPeriodNotMet();
     error InsufficientCollateral();
+    error OperatorDeleted();
     error OperatorAlreadyRegistered();
     error InvalidRegistrationRoot();
     error EthTransferFailed();
@@ -178,6 +177,7 @@ interface IRegistry {
     error InvalidDelegation();
     error DifferentSlots();
     error DelegationsAreSame();
+    error TimestampTooOld();
     error OperatorAlreadyEquivocated();
     error AlreadyOptedIn();
     error NotOptedIn();
