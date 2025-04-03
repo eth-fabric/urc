@@ -322,9 +322,7 @@ contract Registry is IRegistry {
     /// @param delegation The SignedDelegation signed by the operator's BLS key
     /// @param commitment The SignedCommitment signed by the delegate's ECDSA key
     /// @param evidence Arbitrary evidence to slash the operator, required by the Slasher contract
-
     /// @return slashAmountWei The amount of Wei slashed
-
     function slashCommitment(
         bytes32 registrationRoot,
         BLS.G2Point calldata registrationSignature,
@@ -345,7 +343,6 @@ contract Registry is IRegistry {
         bytes32 slashingDigest = keccak256(abi.encode(delegation, commitment, registrationRoot));
 
         // Prevent slashing with same inputs - MOVED TO START
-
         if (slashedBefore[slashingDigest]) {
             revert SlashingAlreadyOccurred();
         }
@@ -498,7 +495,6 @@ contract Registry is IRegistry {
             revert SlashAmountExceedsCollateral();
         }
 
-
         // Decrement operator's collateral - MOVED BEFORE BURNING
         operator.collateralWei -= uint80(slashAmountWei);
 
@@ -529,7 +525,14 @@ contract Registry is IRegistry {
     /// @dev - The slash window has expired (SlashWindowExpired)
     /// @dev - Either delegation is invalid (InvalidDelegation)
     /// @dev - The delegations are for different slots (DifferentSlots)
-
+    /// @dev - ETH transfer to challenger fails (EthTransferFailed)
+    /// @param registrationRoot The merkle root generated and stored from the register() function
+    /// @param registrationSignature The signature from the operator's previously registered `Registration`
+    /// @param proof The merkle proof to verify the operator's key is in the registry
+    /// @param leafIndex The index of the leaf in the merkle tree
+    /// @param delegationOne The first SignedDelegation signed by the operator's BLS key
+    /// @param delegationTwo The second SignedDelegation signed by the operator's BLS key
+    /// @return slashAmountWei The amount of WEI slashed
     /// @notice Slash an operator for equivocation (signing two different delegations for the same slot)
     /// @dev The function will queue a slash request with waiting period instead of executing immediately
 
