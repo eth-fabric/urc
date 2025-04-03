@@ -985,13 +985,13 @@ contract Registry is IRegistry {
         BLS.G2Point calldata registrationSignature,
         bytes32[] calldata proof,
         uint256 leafIndex,
-        ISlasher.SignedDelegation calldata delegation
+        ISlasher.SignedDelegation calldata delegation,
+        address owner
     ) internal view returns (uint256 collateralWei) {
         // Reconstruct leaf using pubkey in SignedDelegation to check equivalence
-        // Instead of manually encoding, create a Registration struct
         Registration memory reg =
-            Registration({ pubkey: delegation.delegation.proposer, signature: registrationSignature });
-        bytes32 leaf = keccak256(abi.encode(reg));
+                        Registration({ pubkey: delegation.delegation.proposer, signature: registrationSignature });
+        bytes32 leaf = keccak256(abi.encode(reg, owner));
 
         collateralWei = _verifyMerkleProof(registrationRoot, leaf, proof, leafIndex);
 
