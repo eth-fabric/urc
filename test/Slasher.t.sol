@@ -1088,9 +1088,7 @@ contract SlashReentrantTester is UnitTestHelper {
 
         uint256 challengerBalanceBefore = challenger.balance;
         uint256 urcBalanceBefore = address(registry).balance;
-
-        uint80 operatorCollateralGweiBefore = getRegistrationData(result.registrationRoot).collateralGwei;
-
+        uint80 operatorCollateralWeiBefore = getRegistrationData(result.registrationRoot).collateralWei;
 
         // Sign a second delegation to equivocate
         ISlasher.SignedDelegation memory signedDelegationTwo = signDelegation(

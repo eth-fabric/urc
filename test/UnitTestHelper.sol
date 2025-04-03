@@ -109,27 +109,25 @@ contract UnitTestHelper is Test {
 
     struct OperatorData {
         address owner;
-
-        uint80 collateralGwei;
-        uint8 numKeys;
-        uint32 registeredAt;
-        uint32 unregisteredAt;
-        uint32 slashedAt;
+        uint80 collateralWei;
+        uint16 numKeys;
+        uint48 registeredAt;
+        uint48 unregisteredAt;
+        uint48 slashedAt;
         bool deleted;
-
+        bool equivocated;
     }
 
     function getRegistrationData(bytes32 registrationRoot) public view returns (OperatorData memory) {
         (
             address owner,
-
-            uint80 collateralGwei,
-            uint8 numKeys,
-            uint32 registeredAt,
-            uint32 unregisteredAt,
-            uint32 slashedAt,
-            bool deleted
-
+            uint80 collateralWei,
+            uint16 numKeys,
+            uint48 registeredAt,
+            uint48 unregisteredAt,
+            uint48 slashedAt,
+            bool deleted,
+            bool equivocated
         ) = registry.registrations(registrationRoot);
 
         return OperatorData({
@@ -139,9 +137,8 @@ contract UnitTestHelper is Test {
             registeredAt: registeredAt,
             unregisteredAt: unregisteredAt,
             slashedAt: slashedAt,
-
-            deleted: deleted
-
+            deleted: deleted,
+            equivocated: equivocated
         });
     }
 
