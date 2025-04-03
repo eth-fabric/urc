@@ -50,9 +50,7 @@ interface ISlasher {
     /// @param commitment The commitment message
     /// @param evidence Arbitrary evidence for the slashing
     /// @param challenger The address of the challenger
-
-    /// @return slashAmountWei The amount of Wei slashed
-
+    /// @return slashAmountWei The amount of WEI slashed
     function slash(
         Delegation calldata delegation,
         Commitment calldata commitment,
@@ -65,9 +63,7 @@ interface ISlasher {
     /// @param commitment The commitment message
     /// @param evidence Arbitrary evidence for the slashing
     /// @param challenger The address of the challenger
-
-    /// @return slashAmountWei The amount of Wei slashed
-
+    /// @return slashAmountWei The amount of WEI slashed
     function slashFromOptIn(Commitment calldata commitment, bytes calldata evidence, address challenger)
         external
         returns (uint256 slashAmountWei);
