@@ -41,6 +41,17 @@ interface IRegistry {
         CollateralRecord[] collateralHistory;
     }
 
+    struct PendingSlash {
+        SlashingType slashType;
+        uint32 reportedAt;
+        uint32 canExecuteAt;
+        address reporter;
+        uint256 slashAmountGwei;
+        bytes32 slashingDigest;
+        bytes32 reversedSlashingDigest;
+        uint64 slotId;
+    }
+
     /// @notice A struct to track opt-in and opt-out status for proposer commitment protocols
     struct SlasherCommitment {
         /// The block number when the operator opted in
@@ -98,6 +109,8 @@ interface IRegistry {
         uint256 slashAmountGwei
     );
 
+    event SlashQueued(bytes32 registrationRoot, SlashingType slashType, uint256 slashAmount);
+
     /// @notice Emitted when an operator is unregistered
     /// @param registrationRoot The merkle root of the registration merkle tree
     /// @param unregisteredAt The block number when the operator was unregistered
@@ -131,6 +144,11 @@ interface IRegistry {
      *                                *
      *
      */
+    error TimestampTooOld();
+    error SlotAlreadySlashed();
+    error DustAmountNotAllowed();
+    error NoSlashPending();
+    error SlashWaitingPeriodNotMet();
     error InsufficientCollateral();
     error OperatorAlreadyRegistered();
     error InvalidRegistrationRoot();
