@@ -937,6 +937,7 @@ contract Registry is IRegistry {
     /// @return registrationRoot The merkle root of the registration
     function _merkleizeRegistrationsWithOwner(Registration[] calldata regs, address owner)
         internal
+        pure
         returns (bytes32 registrationRoot)
     {
         // Create leaves array with padding
