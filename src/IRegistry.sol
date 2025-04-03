@@ -25,22 +25,20 @@ interface IRegistry {
     struct Operator {
         /// The authorized address of the operator
         address owner;
-
         /// ETH collateral in Wei
         uint80 collateralWei;
-        /// The number of keys registered per operator (capped at 255)
-        uint8 numKeys;
-
+        /// The number of keys registered per operator
+        uint16 numKeys;
         /// The block number when registration occurred
         uint48 registeredAt;
         /// The block number when deregistration occurred
         uint48 unregisteredAt;
         /// The block number when slashed from breaking a commitment
-
-        uint32 slashedAt;
+        uint48 slashedAt;
         /// A field to simulate deletion of the operator, since deleting a struct with a nested mapping is not safe
         bool deleted;
-
+        /// Whether the operator has equivocated or not
+        bool equivocated;
         /// Mapping to track opt-in and opt-out status for proposer commitment protocols
         mapping(address slasher => SlasherCommitment) slasherCommitments;
         /// Historical collateral records
@@ -89,8 +87,7 @@ interface IRegistry {
      */
     /// @notice Emitted when an operator is registered
     /// @param registrationRoot The merkle root of the registration merkle tree
-
-    /// @param collateralWei The collateral amount in Wei
+    /// @param collateralWei The collateral amount in WEI
     /// @param owner The owner of the operator
     event OperatorRegistered(bytes32 indexed registrationRoot, uint256 collateralWei, address owner);
 
@@ -107,9 +104,7 @@ interface IRegistry {
     /// @param challenger The address of the challenger
     /// @param slashingType The type of slashing
     /// @param slasher The address of the slasher
-
-    /// @param slashAmountWei The amount of Wei slashed
-
+    /// @param slashAmountWei The amount of WEI slashed
     event OperatorSlashed(
         SlashingType slashingType,
         bytes32 indexed registrationRoot,
@@ -119,6 +114,10 @@ interface IRegistry {
         uint256 slashAmountWei
     );
 
+    /// @notice Emitted when a slash event is queued
+    /// @param registrationRoot
+    /// @param slashType
+    /// @param slashAmount
     event SlashQueued(bytes32 registrationRoot, SlashingType slashType, uint256 slashAmount);
 
     /// @notice Emitted when an operator is unregistered
@@ -127,16 +126,12 @@ interface IRegistry {
 
     /// @notice Emitted when collateral is claimed
     /// @param registrationRoot The merkle root of the registration merkle tree
-
     /// @param collateralWei The amount of Wei claimed
-
     event CollateralClaimed(bytes32 indexed registrationRoot, uint256 collateralWei);
 
     /// @notice Emitted when collateral is added
     /// @param registrationRoot The merkle root of the registration merkle tree
-
     /// @param collateralWei The amount of Wei added
-
     event CollateralAdded(bytes32 indexed registrationRoot, uint256 collateralWei);
 
     /// @notice Emitted when an operator is opted into a proposer commitment protocol
