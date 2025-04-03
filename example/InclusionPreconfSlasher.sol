@@ -22,7 +22,7 @@ contract InclusionPreconfSlasher is ISlasher, PreconfStructs {
     using TransactionDecoder for TransactionDecoder.Transaction;
     using EnumerableSet for EnumerableSet.Bytes32Set;
 
-    uint256 public SLASH_AMOUNT_GWEI;
+    uint256 public SLASH_AMOUNT_WEI;
     address public constant BEACON_ROOTS_CONTRACT =
         0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02;
     uint256 public constant EIP4788_WINDOW = 8191;
@@ -35,8 +35,8 @@ contract InclusionPreconfSlasher is ISlasher, PreconfStructs {
     address public urc;
     mapping(bytes32 challengeID => Challenge challenge) public challenges;
 
-    constructor(uint256 _slashAmountGwei, address _urc) {
-        SLASH_AMOUNT_GWEI = _slashAmountGwei;
+    constructor(uint256 _slashAmountWei, address _urc) {
+        SLASH_AMOUNT_WEI = _slashAmountWei;
         urc = _urc;
 
         if (block.chainid == 17000) {
@@ -125,7 +125,7 @@ contract InclusionPreconfSlasher is ISlasher, PreconfStructs {
         ISlasher.Commitment calldata commitment,
         bytes calldata evidence,
         address challenger
-    ) external returns (uint256 slashAmountGwei) {
+    ) external returns (uint256 slashAmountWei) {
         if (msg.sender != urc) {
             revert NotURC();
         }
@@ -153,14 +153,14 @@ contract InclusionPreconfSlasher is ISlasher, PreconfStructs {
         }
 
         // Return the slash amount to the URC slasher
-        slashAmountGwei = SLASH_AMOUNT_GWEI;
+        slashAmountWei = SLASH_AMOUNT_WEI;
     }
 
     function slashFromOptIn(
         ISlasher.Commitment calldata commitment,
         bytes calldata evidence,
         address challenger
-    ) external returns (uint256 slashAmountGwei) {
+    ) external returns (uint256 slashAmountWei) {
         // unused in this example
     }
 

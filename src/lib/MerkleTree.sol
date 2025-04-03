@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 pragma solidity >=0.8.0 <0.9.0;
 
+import "@openzeppelin/contracts/utils/math/Math.sol";
+
 /**
  * @title MerkleTree
  * @dev Implementation of a binary Merkle tree with proof generation and verification
@@ -27,10 +29,6 @@ library MerkleTree {
         // Fill leaf nodes
         for (uint256 i = 0; i < leaves.length; i++) {
             nodes[i] = leaves[i];
-        }
-        // Fill remaining nodes with zero
-        for (uint256 i = leaves.length; i < _nextPowerOfTwo; i++) {
-            nodes[i] = bytes32(0);
         }
 
         // Build up the tree
@@ -164,19 +162,12 @@ library MerkleTree {
     }
 
     /**
-     * @dev Returns the next power of 2 for a number <= 256
-     * @param x The number to find the next power of 2 for (must be <= 256)
+     * @dev Returns the next power of 2 larger than the input
+     * @param x The number to find the next power of 2 for
      * @return The next power of 2
      */
     function nextPowerOfTwo(uint256 x) internal pure returns (uint256) {
         if (x <= 1) return 1;
-        if (x <= 2) return 2;
-        if (x <= 4) return 4;
-        if (x <= 8) return 8;
-        if (x <= 16) return 16;
-        if (x <= 32) return 32;
-        if (x <= 64) return 64;
-        if (x <= 128) return 128;
-        return 256;
+        return 1 << Math.log2(x, Math.Rounding.Ceil);
     }
 }

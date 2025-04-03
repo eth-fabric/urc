@@ -11,22 +11,22 @@ import { ISlasher } from "../src/ISlasher.sol";
 import { UnitTestHelper, IReentrantContract } from "./UnitTestHelper.sol";
 
 contract DummySlasher is ISlasher {
-    uint256 public SLASH_AMOUNT_GWEI = 1 ether / 1 gwei;
+    uint256 public SLASH_AMOUNT_WEI = 1 ether;
 
     function slash(
         ISlasher.Delegation calldata delegation,
         ISlasher.Commitment calldata commitment,
         bytes calldata evidence,
         address challenger
-    ) external returns (uint256 slashAmountGwei) {
-        slashAmountGwei = SLASH_AMOUNT_GWEI;
+    ) external returns (uint256 slashAmountWei) {
+        slashAmountWei = SLASH_AMOUNT_WEI;
     }
 
     function slashFromOptIn(ISlasher.Commitment calldata commitment, bytes calldata evidence, address challenger)
         external
-        returns (uint256 slashAmountGwei)
+        returns (uint256 slashAmountWei)
     {
-        slashAmountGwei = SLASH_AMOUNT_GWEI;
+        slashAmountWei = SLASH_AMOUNT_WEI;
     }
 }
 
@@ -65,7 +65,7 @@ contract SlashCommitmentTester is UnitTestHelper {
             basicCommitment(params.committerSecretKey, params.slasher, "");
 
         // Setup proof
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         uint256 leafIndex = 0;
         bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
         bytes memory evidence = "";
@@ -84,10 +84,10 @@ contract SlashCommitmentTester is UnitTestHelper {
             operator,
             challenger,
             address(dummySlasher),
-            dummySlasher.SLASH_AMOUNT_GWEI()
+            dummySlasher.SLASH_AMOUNT_WEI()
         );
 
-        uint256 gotSlashAmountGwei = registry.slashCommitment(
+        uint256 gotSlashAmountWei = registry.slashCommitment(
             result.registrationRoot,
             result.registrations[leafIndex].signature,
             proof,
@@ -97,11 +97,9 @@ contract SlashCommitmentTester is UnitTestHelper {
             evidence
         );
 
-        assertEq(dummySlasher.SLASH_AMOUNT_GWEI(), gotSlashAmountGwei, "Slash amount incorrect");
+        assertEq(dummySlasher.SLASH_AMOUNT_WEI(), gotSlashAmountWei, "Slash amount incorrect");
 
-        _verifySlashCommitmentBalances(
-            challenger, gotSlashAmountGwei * 1 gwei, 0, challengerBalanceBefore, urcBalanceBefore
-        );
+        _verifySlashCommitmentBalances(challenger, gotSlashAmountWei, 0, challengerBalanceBefore, urcBalanceBefore);
 
         OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
 
@@ -109,9 +107,7 @@ contract SlashCommitmentTester is UnitTestHelper {
         assertEq(operatorData.slashedAt, block.number, "slashedAt not set");
 
         // Verify operator's collateralGwei is decremented
-        assertEq(
-            operatorData.collateralGwei, collateral / 1 gwei - gotSlashAmountGwei, "collateralGwei not decremented"
-        );
+        assertEq(operatorData.collateralWei, collateral - gotSlashAmountWei, "collateralGwei not decremented");
 
         // Verify the slashedBefore mapping is set
         bytes32 slashingDigest =
@@ -138,7 +134,7 @@ contract SlashCommitmentTester is UnitTestHelper {
         ISlasher.SignedCommitment memory signedCommitment =
             basicCommitment(params.committerSecretKey, params.slasher, "");
 
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         uint256 leafIndex = 0;
         bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
         bytes memory evidence = "";
@@ -213,7 +209,7 @@ contract SlashCommitmentTester is UnitTestHelper {
         ISlasher.SignedDelegation memory badSignedDelegation =
             signDelegation(SECRET_KEY_2, result.signedDelegation.delegation);
 
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         uint256 leafIndex = 0;
         bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
 
@@ -234,7 +230,7 @@ contract SlashCommitmentTester is UnitTestHelper {
     function testRevertSlashAmountExceedsCollateral() public {
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
             proposerSecretKey: SECRET_KEY_1,
-            collateral: dummySlasher.SLASH_AMOUNT_GWEI() * 1 gwei - 1, // less than the slash amount
+            collateral: dummySlasher.SLASH_AMOUNT_WEI() - 1, // less than the slash amount
             owner: operator,
             delegateSecretKey: SECRET_KEY_2,
             committerSecretKey: committerSecretKey,
@@ -248,7 +244,7 @@ contract SlashCommitmentTester is UnitTestHelper {
         ISlasher.SignedCommitment memory signedCommitment =
             basicCommitment(params.committerSecretKey, params.slasher, "");
 
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         uint256 leafIndex = 0;
         bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
 
@@ -285,7 +281,7 @@ contract SlashCommitmentTester is UnitTestHelper {
             basicCommitment(params.committerSecretKey, params.slasher, "");
 
         // Setup proof
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         uint256 leafIndex = 0;
         bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
         bytes memory evidence = "";
@@ -345,18 +341,16 @@ contract SlashCommitmentTester is UnitTestHelper {
         // claim collateral
         vm.startPrank(operator);
         vm.expectEmit(address(registry));
-        emit IRegistry.CollateralClaimed(result.registrationRoot, operatorData.collateralGwei);
+        emit IRegistry.CollateralClaimed(result.registrationRoot, operatorData.collateralWei);
         registry.claimSlashedCollateral(result.registrationRoot);
 
         // verify operator's balance is increased
         assertEq(
-            operator.balance,
-            operatorCollateralBefore + uint256(operatorData.collateralGwei) * 1 gwei,
-            "operator did not claim collateral"
+            operator.balance, operatorCollateralBefore + operatorData.collateralWei, "operator did not claim collateral"
         );
 
         // verify operator was deleted
-        _assertRegistration(result.registrationRoot, address(0), 0, 0, 0, 0);
+        assertEq(getRegistrationData(result.registrationRoot).deleted, true, "operator was not deleted");
     }
 
     // test multiple slashings
@@ -378,7 +372,7 @@ contract SlashCommitmentTester is UnitTestHelper {
             basicCommitment(params.committerSecretKey, params.slasher, "");
 
         // Setup proof
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         uint256 leafIndex = 0;
         bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
         bytes memory evidence = "";
@@ -394,7 +388,7 @@ contract SlashCommitmentTester is UnitTestHelper {
             operator,
             challenger,
             address(dummySlasher),
-            dummySlasher.SLASH_AMOUNT_GWEI()
+            dummySlasher.SLASH_AMOUNT_WEI()
         );
         registry.slashCommitment(
             result.registrationRoot,
@@ -415,7 +409,7 @@ contract SlashCommitmentTester is UnitTestHelper {
             operator,
             challenger,
             address(dummySlasher),
-            dummySlasher.SLASH_AMOUNT_GWEI()
+            dummySlasher.SLASH_AMOUNT_WEI()
         );
         registry.slashCommitment(
             result.registrationRoot,
@@ -431,8 +425,8 @@ contract SlashCommitmentTester is UnitTestHelper {
 
         // verify operator's collateralGwei is decremented by 2 slashings
         assertEq(
-            operatorData.collateralGwei,
-            collateral / 1 gwei - 2 * dummySlasher.SLASH_AMOUNT_GWEI(),
+            operatorData.collateralWei,
+            collateral - 2 * dummySlasher.SLASH_AMOUNT_WEI(),
             "collateralGwei not decremented"
         );
     }
@@ -491,16 +485,14 @@ contract SlashCommitmentFromOptInTester is UnitTestHelper {
             operator,
             challenger,
             address(dummySlasher),
-            dummySlasher.SLASH_AMOUNT_GWEI()
+            dummySlasher.SLASH_AMOUNT_WEI()
         );
 
-        uint256 gotSlashAmountGwei = registry.slashCommitmentFromOptIn(result.registrationRoot, signedCommitment, "");
+        uint256 gotSlashAmountWei = registry.slashCommitmentFromOptIn(result.registrationRoot, signedCommitment, "");
 
-        assertEq(dummySlasher.SLASH_AMOUNT_GWEI(), gotSlashAmountGwei, "Slash amount incorrect");
+        assertEq(dummySlasher.SLASH_AMOUNT_WEI(), gotSlashAmountWei, "Slash amount incorrect");
 
-        _verifySlashCommitmentBalances(
-            challenger, gotSlashAmountGwei * 1 gwei, 0, challengerBalanceBefore, urcBalanceBefore
-        );
+        _verifySlashCommitmentBalances(challenger, gotSlashAmountWei, 0, challengerBalanceBefore, urcBalanceBefore);
 
         OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
 
@@ -508,9 +500,7 @@ contract SlashCommitmentFromOptInTester is UnitTestHelper {
         assertEq(operatorData.slashedAt, block.number, "slashedAt not set");
 
         // Verify operator's collateralGwei is decremented
-        assertEq(
-            operatorData.collateralGwei, collateral / 1 gwei - gotSlashAmountGwei, "collateralGwei not decremented"
-        );
+        assertEq(operatorData.collateralWei, collateral - gotSlashAmountWei, "collateralWei not decremented");
 
         // Verify the SlasherCommitment mapping is cleared
         IRegistry.SlasherCommitment memory slasherCommitment =
@@ -668,7 +658,7 @@ contract SlashCommitmentFromOptInTester is UnitTestHelper {
     function testRevertSlashAmountExceedsCollateral() public {
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
             proposerSecretKey: SECRET_KEY_1,
-            collateral: dummySlasher.SLASH_AMOUNT_GWEI() * 1 gwei - 1, // Less than slash amount
+            collateral: dummySlasher.SLASH_AMOUNT_WEI() - 1, // Less than slash amount
             owner: operator,
             delegateSecretKey: SECRET_KEY_2,
             committerSecretKey: committerSecretKey,
@@ -732,7 +722,7 @@ contract SlashEquivocationTester is UnitTestHelper {
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
 
         // Setup proof
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         uint256 leafIndex = 0;
         bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
 
@@ -742,10 +732,10 @@ contract SlashEquivocationTester is UnitTestHelper {
         // Sign delegation
         ISlasher.Delegation memory delegationTwo = ISlasher.Delegation({
             proposer: BLS.toPublicKey(params.proposerSecretKey),
-            delegate: BLS.toPublicKey(params.delegateSecretKey),
+            delegate: BLS.toPublicKey(0), // different delegate
             committer: params.committer,
             slot: params.slot,
-            metadata: "different metadata"
+            metadata: ""
         });
 
         ISlasher.SignedDelegation memory signedDelegationTwo = signDelegation(params.proposerSecretKey, delegationTwo);
@@ -765,14 +755,12 @@ contract SlashEquivocationTester is UnitTestHelper {
         OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
 
         // verify operator's collateralGwei is decremented by MIN_COLLATERAL
-        assertEq(
-            operatorData.collateralGwei,
-            (collateral - registry.MIN_COLLATERAL()) / 1 gwei,
-            "collateralGwei not decremented"
-        );
+        assertEq(operatorData.collateralWei, (collateral - registry.MIN_COLLATERAL()), "collateralWei not decremented");
 
         assertEq(
-            challenger.balance, challengerBalanceBefore + registry.MIN_COLLATERAL(), "challenger did not receive reward"
+            challenger.balance,
+            challengerBalanceBefore + registry.MIN_COLLATERAL() / 2,
+            "challenger did not receive reward"
         );
     }
 
@@ -791,16 +779,16 @@ contract SlashEquivocationTester is UnitTestHelper {
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
 
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         bytes32[] memory proof = MerkleTree.generateProof(leaves, 0);
 
-        // Create second delegation with different metadata
+        // Create second delegation
         ISlasher.Delegation memory delegationTwo = ISlasher.Delegation({
             proposer: BLS.toPublicKey(params.proposerSecretKey),
-            delegate: BLS.toPublicKey(params.delegateSecretKey),
+            delegate: BLS.toPublicKey(0), // different delegate
             committer: params.committer,
             slot: params.slot,
-            metadata: "different metadata"
+            metadata: ""
         });
 
         ISlasher.SignedDelegation memory signedDelegationTwo = signDelegation(params.proposerSecretKey, delegationTwo);
@@ -839,10 +827,10 @@ contract SlashEquivocationTester is UnitTestHelper {
         // Create second delegation
         ISlasher.Delegation memory delegationTwo = ISlasher.Delegation({
             proposer: BLS.toPublicKey(params.proposerSecretKey),
-            delegate: BLS.toPublicKey(params.delegateSecretKey),
+            delegate: BLS.toPublicKey(0), // different delegate
             committer: params.committer,
             slot: params.slot,
-            metadata: "different metadata"
+            metadata: ""
         });
 
         ISlasher.SignedDelegation memory signedDelegationTwo = signDelegation(params.proposerSecretKey, delegationTwo);
@@ -876,7 +864,7 @@ contract SlashEquivocationTester is UnitTestHelper {
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
 
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         bytes32[] memory proof = MerkleTree.generateProof(leaves, 0);
 
         vm.roll(block.timestamp + registry.FRAUD_PROOF_WINDOW() + 1);
@@ -908,7 +896,7 @@ contract SlashEquivocationTester is UnitTestHelper {
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
 
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         bytes32[] memory proof = MerkleTree.generateProof(leaves, 0);
 
         // Create second delegation with different slot
@@ -917,7 +905,7 @@ contract SlashEquivocationTester is UnitTestHelper {
             delegate: BLS.toPublicKey(params.delegateSecretKey),
             committer: params.committer,
             slot: params.slot + 1, // Different slot
-            metadata: "different metadata"
+            metadata: ""
         });
 
         ISlasher.SignedDelegation memory signedDelegationTwo = signDelegation(params.proposerSecretKey, delegationTwo);
@@ -951,16 +939,16 @@ contract SlashEquivocationTester is UnitTestHelper {
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
 
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         bytes32[] memory proof = MerkleTree.generateProof(leaves, 0);
 
         // Create second delegation
         ISlasher.Delegation memory delegationTwo = ISlasher.Delegation({
             proposer: BLS.toPublicKey(params.proposerSecretKey),
-            delegate: BLS.toPublicKey(params.delegateSecretKey),
+            delegate: BLS.toPublicKey(0), // different delegate
             committer: params.committer,
             slot: params.slot,
-            metadata: "different metadata"
+            metadata: ""
         });
 
         ISlasher.SignedDelegation memory signedDelegationTwo = signDelegation(params.proposerSecretKey, delegationTwo);
@@ -979,7 +967,7 @@ contract SlashEquivocationTester is UnitTestHelper {
         );
 
         // Try to slash again with same delegations
-        vm.expectRevert(IRegistry.SlashingAlreadyOccurred.selector);
+        vm.expectRevert(IRegistry.OperatorAlreadyEquivocated.selector);
         registry.slashEquivocation(
             result.registrationRoot,
             result.registrations[0].signature,
@@ -990,7 +978,7 @@ contract SlashEquivocationTester is UnitTestHelper {
         );
 
         // Try reversing the order of the delegations
-        vm.expectRevert(IRegistry.SlashingAlreadyOccurred.selector);
+        vm.expectRevert(IRegistry.OperatorAlreadyEquivocated.selector);
         registry.slashEquivocation(
             result.registrationRoot,
             result.registrations[0].signature,
@@ -1016,16 +1004,16 @@ contract SlashEquivocationTester is UnitTestHelper {
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
 
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         bytes32[] memory proof = MerkleTree.generateProof(leaves, 0);
 
         // Create second delegation
         ISlasher.Delegation memory delegationTwo = ISlasher.Delegation({
             proposer: BLS.toPublicKey(params.proposerSecretKey),
-            delegate: BLS.toPublicKey(params.delegateSecretKey),
+            delegate: BLS.toPublicKey(0), // different delegate
             committer: params.committer,
             slot: params.slot,
-            metadata: "different metadata"
+            metadata: ""
         });
 
         ISlasher.SignedDelegation memory signedDelegationTwo = signDelegation(params.proposerSecretKey, delegationTwo);
@@ -1092,7 +1080,7 @@ contract SlashReentrantTester is UnitTestHelper {
             basicCommitment(params.committerSecretKey, params.slasher, "");
 
         // Setup proof
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         bytes32[] memory proof = MerkleTree.generateProof(leaves, 0);
 
         // skip past fraud proof window
@@ -1100,17 +1088,19 @@ contract SlashReentrantTester is UnitTestHelper {
 
         uint256 challengerBalanceBefore = challenger.balance;
         uint256 urcBalanceBefore = address(registry).balance;
+
         uint80 operatorCollateralGweiBefore = getRegistrationData(result.registrationRoot).collateralGwei;
+
 
         // Sign a second delegation to equivocate
         ISlasher.SignedDelegation memory signedDelegationTwo = signDelegation(
             params.proposerSecretKey,
             ISlasher.Delegation({
                 proposer: BLS.toPublicKey(params.proposerSecretKey),
-                delegate: BLS.toPublicKey(params.delegateSecretKey),
+                delegate: BLS.toPublicKey(0), // different delegate
                 committer: params.committer,
                 slot: params.slot,
-                metadata: "different metadata"
+                metadata: ""
             })
         );
 
@@ -1123,9 +1113,9 @@ contract SlashReentrantTester is UnitTestHelper {
             reentrantContractAddress,
             challenger,
             address(registry),
-            registry.MIN_COLLATERAL() / 1 gwei
+            registry.MIN_COLLATERAL()
         );
-        uint256 gotSlashAmountGwei = registry.slashEquivocation(
+        registry.slashEquivocation(
             result.registrationRoot,
             result.registrations[0].signature,
             proof,
@@ -1133,29 +1123,33 @@ contract SlashReentrantTester is UnitTestHelper {
             result.signedDelegation,
             signedDelegationTwo
         );
-        assertEq(registry.MIN_COLLATERAL() / 1 gwei, gotSlashAmountGwei, "Slash amount incorrect");
 
         OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
 
         // verify operator's collateralGwei is decremented by MIN_COLLATERAL
         assertEq(
-            operatorData.collateralGwei,
-            (IReentrantContract(reentrantContractAddress).collateral() - registry.MIN_COLLATERAL()) / 1 gwei,
-            "collateralGwei not decremented"
+            operatorData.collateralWei,
+            (IReentrantContract(reentrantContractAddress).collateral() - registry.MIN_COLLATERAL()),
+            "collateralWei not decremented"
         );
 
         assertEq(
-            challenger.balance, challengerBalanceBefore + registry.MIN_COLLATERAL(), "challenger did not receive reward"
+            challenger.balance,
+            challengerBalanceBefore + registry.MIN_COLLATERAL() / 2,
+            "challenger did not receive reward"
         );
 
         // Verify operator's slashedAt is set
         assertEq(operatorData.slashedAt, block.number, "slashedAt not set");
 
+        // Verify operator's equivocated is set
+        assertEq(operatorData.equivocated, true, "operator not equivocated");
+
         // Verify operator's collateralGwei is decremented
         assertEq(
-            operatorData.collateralGwei,
-            operatorCollateralGweiBefore - gotSlashAmountGwei,
-            "collateralGwei not decremented"
+            operatorData.collateralWei,
+            operatorCollateralWeiBefore - registry.MIN_COLLATERAL(),
+            "collateralWei not decremented"
         );
     }
 }
@@ -1196,15 +1190,15 @@ contract SlashConditionTester is UnitTestHelper {
             params.proposerSecretKey,
             ISlasher.Delegation({
                 proposer: BLS.toPublicKey(params.proposerSecretKey),
-                delegate: BLS.toPublicKey(params.delegateSecretKey),
+                delegate: BLS.toPublicKey(0), // different delegate
                 committer: params.committer,
                 slot: params.slot,
-                metadata: "different metadata"
+                metadata: ""
             })
         );
 
         // Setup proof
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         uint256 leafIndex = 0;
         bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
 
@@ -1253,15 +1247,15 @@ contract SlashConditionTester is UnitTestHelper {
             params.proposerSecretKey,
             ISlasher.Delegation({
                 proposer: BLS.toPublicKey(params.proposerSecretKey),
-                delegate: BLS.toPublicKey(params.delegateSecretKey),
+                delegate: BLS.toPublicKey(0), // different delegate
                 committer: params.committer,
                 slot: params.slot,
-                metadata: "different metadata"
+                metadata: ""
             })
         );
 
         // Setup proof
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         uint256 leafIndex = 0;
         bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
 
@@ -1287,6 +1281,7 @@ contract SlashConditionTester is UnitTestHelper {
         // Verify operator was slashed
         OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
         assertEq(operatorData.slashedAt, block.number, "operator not slashed");
+        assertEq(operatorData.equivocated, true, "operator not equivocated");
 
         // Move past unregistration delay
         vm.roll(block.number + registry.UNREGISTRATION_DELAY() + 1);

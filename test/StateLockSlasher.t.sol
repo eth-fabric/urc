@@ -31,14 +31,14 @@ contract StateLockSlasherTest is UnitTestHelper, PreconfStructs {
 
     StateLockSlasher slasher;
     BLS.G1Point delegatePubKey;
-    uint256 slashAmountGwei = 1 ether / 1 gwei; // slash 1 ether
+    uint256 slashAmountWei = 1 ether;
     uint256 collateral = 1.1 ether;
     uint256 committerSecretKey;
     address committer;
 
     function setUp() public {
         vm.createSelectFork(vm.rpcUrl("mainnet"));
-        slasher = new StateLockSlasher(slashAmountGwei);
+        slasher = new StateLockSlasher(slashAmountWei);
         registry = new Registry();
         (committer, committerSecretKey) = makeAddrAndKey("commitmentsKey");
         delegatePubKey = BLS.toPublicKey(SECRET_KEY_2);
@@ -194,8 +194,10 @@ contract StateLockSlasherTest is UnitTestHelper, PreconfStructs {
             bytes memory evidence
         ) = setupSlash(1);
 
+        OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
+
         // Merkle proof for URC registration
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operatorData.owner);
         uint256 leafIndex = 0;
         bytes32[] memory registrationProof = MerkleTree.generateProof(leaves, leafIndex);
 
@@ -215,18 +217,16 @@ contract StateLockSlasherTest is UnitTestHelper, PreconfStructs {
             evidence
         );
 
-        _verifySlashCommitmentBalances(
-            challenger, slashAmountGwei * 1 gwei, 0, challengerBalanceBefore, urcBalanceBefore
-        );
+        _verifySlashCommitmentBalances(challenger, slashAmountWei, 0, challengerBalanceBefore, urcBalanceBefore);
 
         // Retrieve operator data
-        OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
+        operatorData = getRegistrationData(result.registrationRoot);
 
         // Verify operator's slashedAt is set
         assertEq(operatorData.slashedAt, block.number, "slashedAt not set");
 
         // Verify operator's collateralGwei is decremented
-        assertEq(operatorData.collateralGwei, collateral / 1 gwei - slashAmountGwei, "collateralGwei not decremented");
+        assertEq(operatorData.collateralWei, collateral - slashAmountWei, "collateralGwei not decremented");
 
         // Verify the slashedBefore mapping is set
         bytes32 slashingDigest =

@@ -31,7 +31,7 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
 
     InclusionPreconfSlasher slasher;
     BLS.G1Point delegatePubKey;
-    uint256 slashAmountGwei = 1 ether / 1 gwei; // slash 1 ether
+    uint256 slashAmountWei = 1 ether;
     uint256 collateral = 1.1 ether;
     uint256 committerSecretKey;
     address committer;
@@ -39,7 +39,7 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
     function setUp() public {
         vm.createSelectFork(vm.rpcUrl("mainnet"));
         registry = new Registry();
-        slasher = new InclusionPreconfSlasher(slashAmountGwei, address(registry));
+        slasher = new InclusionPreconfSlasher(slashAmountWei, address(registry));
         delegatePubKey = BLS.toPublicKey(SECRET_KEY_2);
         (committer, committerSecretKey) = makeAddrAndKey("commitmentsKey");
         vm.deal(challenger, 100 ether);
@@ -230,7 +230,7 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
         vm.warp(block.timestamp + slasher.CHALLENGE_WINDOW() + 1);
 
         // Merkle proof for URC registration
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         bytes32[] memory registrationProof = MerkleTree.generateProof(
             leaves,
             0 // leaf index
@@ -248,9 +248,7 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
             abi.encode(inclusionProof)
         );
 
-        _verifySlashCommitmentBalances(
-            challenger, slashAmountGwei * 1 gwei, 0, challengerBalanceBefore, urcBalanceBefore
-        );
+        _verifySlashCommitmentBalances(challenger, slashAmountWei, 0, challengerBalanceBefore, urcBalanceBefore);
 
         // Retrieve operator data
         OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
@@ -259,7 +257,7 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
         assertEq(operatorData.slashedAt, block.number, "slashedAt not set");
 
         // Verify operator's collateralGwei is decremented
-        assertEq(operatorData.collateralGwei, collateral / 1 gwei - slashAmountGwei, "collateralGwei not decremented");
+        assertEq(operatorData.collateralWei, collateral - slashAmountWei, "collateralWei not decremented");
 
         // Verify the slashedBefore mapping is set
         bytes32 slashingDigest =
@@ -283,7 +281,7 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
         vm.warp(block.timestamp + slasher.CHALLENGE_WINDOW() + 1);
 
         // Merkle proof for URC registration
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         uint256 leafIndex = 0;
         bytes32[] memory registrationProof = MerkleTree.generateProof(leaves, leafIndex);
 
