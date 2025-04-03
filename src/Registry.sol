@@ -265,7 +265,7 @@ contract Registry is IRegistry {
 
         // Verify the registration is part of the registry
         uint256 verifiedCollateralGwei =
-                        _verifyMerkleProof(registrationRoot, keccak256(abi.encode(reg, owner)), proof, leafIndex);
+            _verifyMerkleProof(registrationRoot, keccak256(abi.encode(reg, owner)), proof, leafIndex);
 
         // 0 collateral implies the registration was not part of the registry
         if (verifiedCollateralGwei == 0) {
@@ -545,9 +545,9 @@ contract Registry is IRegistry {
         // Verify the delegations are not identical by comparing only essential fields
         if (
             delegationOne.delegation.slot == delegationTwo.delegation.slot
-            && keccak256(abi.encode(delegationOne.delegation.delegate))
-            == keccak256(abi.encode(delegationTwo.delegation.delegate))
-            && delegationOne.delegation.committer == delegationTwo.delegation.committer
+                && keccak256(abi.encode(delegationOne.delegation.delegate))
+                    == keccak256(abi.encode(delegationTwo.delegation.delegate))
+                && delegationOne.delegation.committer == delegationTwo.delegation.committer
         ) {
             revert DelegationsAreSame();
         }
@@ -824,9 +824,9 @@ contract Registry is IRegistry {
     /// @param timestamp The timestamp to retrieve the collateral value for
     /// @return collateralWei The collateral amount in WEI at the closest recorded timestamp
     function getHistoricalCollateral(bytes32 registrationRoot, uint256 timestamp)
-    external
-    view
-    returns (uint256 collateralWei)
+        external
+        view
+        returns (uint256 collateralWei)
     {
         CollateralRecord[] storage records = registrations[registrationRoot].collateralHistory;
         if (records.length == 0) {
@@ -870,9 +870,9 @@ contract Registry is IRegistry {
     /// @param leafIndex The index of the leaf in the merkle tree
     /// @return collateralWei The collateral amount in WEI
     function verifyMerkleProof(bytes32 registrationRoot, bytes32 leaf, bytes32[] calldata proof, uint256 leafIndex)
-    external
-    view
-    returns (uint256 collateralWei)
+        external
+        view
+        returns (uint256 collateralWei)
     {
         collateralWei = _verifyMerkleProof(registrationRoot, leaf, proof, leafIndex);
     }
@@ -882,9 +882,9 @@ contract Registry is IRegistry {
     /// @param slasher The address of the slasher to check
     /// @return slasherCommitment The slasher commitment (default values if not opted in)
     function getSlasherCommitment(bytes32 registrationRoot, address slasher)
-    external
-    view
-    returns (SlasherCommitment memory slasherCommitment)
+        external
+        view
+        returns (SlasherCommitment memory slasherCommitment)
     {
         Operator storage operator = registrations[registrationRoot];
         if (operator.registeredAt == 0) {
@@ -937,8 +937,8 @@ contract Registry is IRegistry {
     /// @param regs The array of `Registration` structs to merkleize
     /// @return registrationRoot The merkle root of the registration
     function _merkleizeRegistrationsWithOwner(Registration[] calldata regs, address owner)
-    internal
-    returns (bytes32 registrationRoot)
+        internal
+        returns (bytes32 registrationRoot)
     {
         // Create leaves array with padding
         bytes32[] memory leaves = new bytes32[](regs.length);
@@ -961,9 +961,9 @@ contract Registry is IRegistry {
     /// @param leafIndex The index of the leaf in the merkle tree
     /// @return collateralWei The collateral amount in WEI
     function _verifyMerkleProof(bytes32 registrationRoot, bytes32 leaf, bytes32[] calldata proof, uint256 leafIndex)
-    internal
-    view
-    returns (uint256 collateralWei)
+        internal
+        view
+        returns (uint256 collateralWei)
     {
         if (MerkleTree.verifyProofCalldata(registrationRoot, leaf, leafIndex, proof)) {
             collateralWei = registrations[registrationRoot].collateralWei;
@@ -990,7 +990,7 @@ contract Registry is IRegistry {
     ) internal view returns (uint256 collateralWei) {
         // Reconstruct leaf using pubkey in SignedDelegation to check equivalence
         Registration memory reg =
-                        Registration({ pubkey: delegation.delegation.proposer, signature: registrationSignature });
+            Registration({ pubkey: delegation.delegation.proposer, signature: registrationSignature });
         bytes32 leaf = keccak256(abi.encode(reg, owner));
 
         collateralWei = _verifyMerkleProof(registrationRoot, leaf, proof, leafIndex);
