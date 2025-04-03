@@ -126,12 +126,12 @@ interface IRegistry {
 
     /// @notice Emitted when collateral is claimed
     /// @param registrationRoot The merkle root of the registration merkle tree
-    /// @param collateralWei The amount of Wei claimed
+    /// @param collateralWei The amount of WEI claimed
     event CollateralClaimed(bytes32 indexed registrationRoot, uint256 collateralWei);
 
     /// @notice Emitted when collateral is added
     /// @param registrationRoot The merkle root of the registration merkle tree
-    /// @param collateralWei The amount of Wei added
+    /// @param collateralWei The amount of WEI added
     event CollateralAdded(bytes32 indexed registrationRoot, uint256 collateralWei);
 
     /// @notice Emitted when an operator is opted into a proposer commitment protocol
