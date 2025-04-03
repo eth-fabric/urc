@@ -45,6 +45,17 @@ interface IRegistry {
         CollateralRecord[] collateralHistory;
     }
 
+    struct PendingSlash {
+        SlashingType slashType;
+        uint32 reportedAt;
+        uint32 canExecuteAt;
+        address reporter;
+        uint256 slashAmountWei;
+        bytes32 slashingDigest;
+        bytes32 reversedSlashingDigest;
+        uint64 slotId;
+    }
+
     /// @notice A struct to track opt-in and opt-out status for proposer commitment protocols
     struct SlasherCommitment {
         /// The block number when the operator opted in
@@ -80,6 +91,12 @@ interface IRegistry {
     /// @param owner The owner of the operator
     event OperatorRegistered(bytes32 indexed registrationRoot, uint256 collateralWei, address owner);
 
+    /// @notice Emitted when a BLS key is registered
+    /// @param leafIndex The index of the BLS key in the registration merkle tree
+    /// @param reg The registration
+    /// @param leaf The leaf hash value of the `Registration`
+    event KeyRegistered(uint256 leafIndex, Registration reg, bytes32 leaf);
+
     /// @notice Emitted when an operator is slashed for fraud, equivocation, or breaking a commitment
     /// @param registrationRoot The merkle root of the registration merkle tree
     /// @param owner The owner of the operator
@@ -95,6 +112,12 @@ interface IRegistry {
         address indexed slasher,
         uint256 slashAmountWei
     );
+
+    /// @notice Emitted when a slash event is queued
+    /// @param registrationRoot
+    /// @param slashType
+    /// @param slashAmount
+    event SlashQueued(bytes32 registrationRoot, SlashingType slashType, uint256 slashAmount);
 
     /// @notice Emitted when an operator is unregistered
     /// @param registrationRoot The merkle root of the registration merkle tree
@@ -128,6 +151,12 @@ interface IRegistry {
      *                                *
      *
      */
+    error OperatorDeleted();
+    error TimestampTooOld();
+    error SlotAlreadySlashed();
+    error DustAmountNotAllowed();
+    error NoSlashPending();
+    error SlashWaitingPeriodNotMet();
     error InsufficientCollateral();
     error OperatorAlreadyRegistered();
     error OperatorDeleted();
@@ -170,9 +199,9 @@ interface IRegistry {
      *
      */
     function register(Registration[] calldata registrations, address owner)
-        external
-        payable
-        returns (bytes32 registrationRoot);
+    external
+    payable
+    returns (bytes32 registrationRoot);
 
     function unregister(bytes32 registrationRoot) external;
 
@@ -219,14 +248,14 @@ interface IRegistry {
     function claimSlashedCollateral(bytes32 registrationRoot) external;
 
     function verifyMerkleProof(bytes32 registrationRoot, bytes32 leaf, bytes32[] calldata proof, uint256 leafIndex)
-        external
-        view
-        returns (uint256 collateralWei);
+    external
+    view
+    returns (uint256 collateralWei);
 
     function getSlasherCommitment(bytes32 registrationRoot, address slasher)
-        external
-        view
-        returns (SlasherCommitment memory slasherCommitment);
+    external
+    view
+    returns (SlasherCommitment memory slasherCommitment);
 
     function isOptedIntoSlasher(bytes32 registrationRoot, address slasher) external view returns (bool);
 
