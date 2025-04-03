@@ -579,8 +579,8 @@ contract Registry is IRegistry {
         }
 
         // Verify both delegations were signed by the operator's BLS key
-        _verifyDelegation(registrationRoot, registrationSignature, proof, leafIndex, delegationOne);
-        _verifyDelegation(registrationRoot, registrationSignature, proof, leafIndex, delegationTwo);
+        _verifyDelegation(registrationRoot, registrationSignature, proof, leafIndex, delegationOne, operator.owner);
+        _verifyDelegation(registrationRoot, registrationSignature, proof, leafIndex, delegationTwo, operator.owner);
 
         // Verify the delegations are for the same slot
         if (delegationOne.delegation.slot != delegationTwo.delegation.slot) {
