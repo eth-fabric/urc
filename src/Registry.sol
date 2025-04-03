@@ -50,9 +50,9 @@ contract Registry is IRegistry {
     /// @param owner The authorized address to perform actions on behalf of the operator
     /// @return registrationRoot The merkle root of the registration
     function register(Registration[] calldata regs, address owner)
-    external
-    payable
-    returns (bytes32 registrationRoot)
+        external
+        payable
+        returns (bytes32 registrationRoot)
     {
         // Add dust check
         if (msg.value % 1 wei != 0) {

@@ -199,9 +199,9 @@ interface IRegistry {
      *
      */
     function register(Registration[] calldata registrations, address owner)
-    external
-    payable
-    returns (bytes32 registrationRoot);
+        external
+        payable
+        returns (bytes32 registrationRoot);
 
     function unregister(bytes32 registrationRoot) external;
 
@@ -248,14 +248,14 @@ interface IRegistry {
     function claimSlashedCollateral(bytes32 registrationRoot) external;
 
     function verifyMerkleProof(bytes32 registrationRoot, bytes32 leaf, bytes32[] calldata proof, uint256 leafIndex)
-    external
-    view
-    returns (uint256 collateralWei);
+        external
+        view
+        returns (uint256 collateralWei);
 
     function getSlasherCommitment(bytes32 registrationRoot, address slasher)
-    external
-    view
-    returns (SlasherCommitment memory slasherCommitment);
+        external
+        view
+        returns (SlasherCommitment memory slasherCommitment);
 
     function isOptedIntoSlasher(bytes32 registrationRoot, address slasher) external view returns (bool);
 
