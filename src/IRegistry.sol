@@ -251,17 +251,21 @@ interface IRegistry {
     function getSlasherCommitment(bytes32 registrationRoot, address slasher)
         external
         view
-        returns (SlasherCommitment memory slasherCommitment);
+        returns (SlasherCommitment memory);
 
     function isOptedIntoSlasher(bytes32 registrationRoot, address slasher) external view returns (bool);
 
-    function getOptedInCommitter(
+    function getVerifiedOperatorData(
         bytes32 registrationRoot,
         SignedRegistration calldata reg,
         bytes32[] calldata proof,
-        uint256 leafIndex,
-        address slasher
-    ) external view returns (SlasherCommitment memory slasherCommitment, uint256 collateralWei);
+        uint256 leafIndex
+    ) external view returns (OperatorData memory);
+
+    function getHistoricalCollateral(bytes32 registrationRoot, uint256 timestamp)
+        external
+        view
+        returns (uint256 collateralWei);
 
     function getConfig() external view returns (Config memory config);
 

@@ -802,46 +802,39 @@ contract Registry is IRegistry {
     function getSlasherCommitment(bytes32 registrationRoot, address slasher)
         external
         view
-        returns (SlasherCommitment memory slasherCommitment)
+        returns (SlasherCommitment memory)
     {
-        Operator storage operator = operators[registrationRoot];
-        if (operator.data.registeredAt == 0) {
-            revert NotRegisteredKey();
-        }
-        slasherCommitment = operator.slasherCommitments[slasher];
+        return operators[registrationRoot].slasherCommitments[slasher];
     }
 
     /// @notice Checks if an operator is opted into a protocol
     /// @param registrationRoot The merkle root generated and stored from the register() function
     /// @param slasher The address of the slasher to check
-    /// @return True if the operator is opted in, false otherwise
+    /// @return True if the operator is opted in and hasn't been slashed, false otherwise
     function isOptedIntoSlasher(bytes32 registrationRoot, address slasher) external view returns (bool) {
-        Operator storage operator = operators[registrationRoot];
-        if (operator.data.registeredAt == 0) {
-            revert NotRegisteredKey();
-        }
-        return operator.slasherCommitments[slasher].optedOutAt < operator.slasherCommitments[slasher].optedInAt;
+        SlasherCommitment memory slasherCommitment = operators[registrationRoot].slasherCommitments[slasher];
+        return slasherCommitment.optedOutAt < slasherCommitment.optedInAt && !slasherCommitment.slashed;
     }
 
-    /// @notice Get the committer for an operator's slasher commitment
+    /// @notice Returns the operator data for a given registration root iff the proof is valid
+    /// @dev The function will revert if the proof is invalid
     /// @param registrationRoot The merkle root generated and stored from the register() function
     /// @param reg The registration to verify
     /// @param proof The merkle proof to verify the operator's key is in the registry
     /// @param leafIndex The index of the leaf in the merkle tree
-    /// @param slasher The address of the slasher to check
-    /// @return slasherCommitment The slasher commitment (default values if not opted in)
-    /// @return collateralWei The collateral amount in WEI (0 if not opted in)
-    function getOptedInCommitter(
+    /// @return operatorData The operator data
+    function getVerifiedOperatorData(
         bytes32 registrationRoot,
         SignedRegistration calldata reg,
         bytes32[] calldata proof,
-        uint256 leafIndex,
-        address slasher
-    ) external view returns (SlasherCommitment memory slasherCommitment, uint256 collateralWei) {
-        Operator storage operator = operators[registrationRoot];
-        slasherCommitment = operator.slasherCommitments[slasher];
+        uint256 leafIndex
+    ) external view returns (OperatorData memory) {
+        OperatorData memory operatorData = operators[registrationRoot].data;
 
-        collateralWei = _verifyMerkleProof(registrationRoot, keccak256(abi.encode(reg)), proof, leafIndex);
+        // Revert if the proof is invalid
+        _verifyMerkleProof(registrationRoot, keccak256(abi.encode(reg, operatorData.owner)), proof, leafIndex);
+
+        return operatorData;
     }
 
     /// @notice Checks if a slashing has already occurred with the same input
