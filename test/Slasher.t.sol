@@ -152,7 +152,7 @@ contract SlashCommitmentTester is UnitTestHelper {
         );
     }
 
-    function testRevertNotRegisteredProposer() public {
+    function testRevertInvalidProof() public {
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
             proposerSecretKey: SECRET_KEY_1,
             collateral: collateral,
@@ -175,7 +175,7 @@ contract SlashCommitmentTester is UnitTestHelper {
 
         vm.roll(block.timestamp + registry.FRAUD_PROOF_WINDOW() + 1);
 
-        vm.expectRevert(IRegistry.NotRegisteredKey.selector);
+        vm.expectRevert(IRegistry.InvalidProof.selector);
         registry.slashCommitment(
             result.registrationRoot,
             result.registrations[0].signature,
@@ -805,7 +805,7 @@ contract SlashEquivocationTester is UnitTestHelper {
         );
     }
 
-    function testRevertEquivocationNotRegisteredKey() public {
+    function testRevertEquivocationInvalidProof() public {
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
             proposerSecretKey: SECRET_KEY_1,
             collateral: collateral,
@@ -838,7 +838,7 @@ contract SlashEquivocationTester is UnitTestHelper {
         vm.roll(block.timestamp + registry.FRAUD_PROOF_WINDOW() + 1);
 
         vm.startPrank(challenger);
-        vm.expectRevert(IRegistry.NotRegisteredKey.selector);
+        vm.expectRevert(IRegistry.InvalidProof.selector);
         registry.slashEquivocation(
             result.registrationRoot,
             result.registrations[0].signature,

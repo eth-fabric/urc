@@ -259,7 +259,7 @@ contract Registry is IRegistry {
 
         // 0 collateral implies the registration was not part of the registry
         if (verifiedCollateralGwei == 0) {
-            revert NotRegisteredKey();
+            revert NoCollateral();
         }
 
         // Reconstruct registration message
@@ -859,6 +859,8 @@ contract Registry is IRegistry {
     {
         if (MerkleTree.verifyProofCalldata(registrationRoot, leaf, leafIndex, proof)) {
             collateralWei = registrations[registrationRoot].collateralWei;
+        } else {
+            revert InvalidProof();
         }
     }
 
@@ -888,7 +890,7 @@ contract Registry is IRegistry {
         collateralWei = _verifyMerkleProof(registrationRoot, leaf, proof, leafIndex);
 
         if (collateralWei == 0) {
-            revert NotRegisteredKey();
+            revert InvalidProof();
         }
 
         // Reconstruct Delegation message

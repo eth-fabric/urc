@@ -161,7 +161,8 @@ interface IRegistry {
     error AlreadyOptedIn();
     error NotOptedIn();
     error OptInDelayNotMet();
-
+    error InvalidProof();
+    error NoCollateral();
     /**
      *
      *                                *
@@ -169,6 +170,7 @@ interface IRegistry {
      *                                *
      *
      */
+
     function register(Registration[] calldata registrations, address owner)
         external
         payable
