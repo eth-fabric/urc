@@ -47,12 +47,14 @@ interface IRegistry {
 
     /// @notice A struct to track opt-in and opt-out status for proposer commitment protocols
     struct SlasherCommitment {
-        /// The block number when the operator opted in
-        uint64 optedInAt;
-        /// The block number when the operator opted out
-        uint64 optedOutAt;
         /// The address of the key used for commitments
         address committer;
+        /// The block number when the operator opted in
+        uint48 optedInAt;
+        /// The block number when the operator opted out
+        uint48 optedOutAt;
+        /// Whether they have been slashed or not
+        bool slashed;
     }
 
     /// @notice A record of collateral at a specific timestamp

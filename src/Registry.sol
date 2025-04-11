@@ -156,6 +156,11 @@ contract Registry is IRegistry {
         // Retrieve the SlasherCommitment struct
         SlasherCommitment storage slasherCommitment = operator.slasherCommitments[slasher];
 
+        // Check if they've been slashed before
+        if (slasherCommitment.slashed) {
+            revert SlashingAlreadyOccurred();
+        }
+
         // Check if already opted in
         if (slasherCommitment.optedOutAt < slasherCommitment.optedInAt) {
             revert AlreadyOptedIn();
@@ -168,7 +173,7 @@ contract Registry is IRegistry {
         }
 
         // Save the block number and committer
-        slasherCommitment.optedInAt = uint64(block.number);
+        slasherCommitment.optedInAt = uint48(block.number);
         slasherCommitment.optedOutAt = 0;
         slasherCommitment.committer = committer;
 
@@ -208,7 +213,7 @@ contract Registry is IRegistry {
         }
 
         // Save the block number
-        slasherCommitment.optedOutAt = uint64(block.number);
+        slasherCommitment.optedOutAt = uint48(block.number);
 
         emit OperatorOptedOut(registrationRoot, slasher);
     }
@@ -456,8 +461,8 @@ contract Registry is IRegistry {
             operator.slashedAt = uint32(block.number);
         }
 
-        // Delete the slasher commitment
-        delete operator.slasherCommitments[slasher];
+        // Set the operator's SlasherCommitment to slashed
+        slasherCommitment.slashed = true;
 
         // Call the Slasher contract to slash the operator
         slashAmountWei = ISlasher(slasher).slashFromOptIn(commitment.commitment, evidence, msg.sender);

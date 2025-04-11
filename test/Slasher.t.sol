@@ -502,13 +502,11 @@ contract SlashCommitmentFromOptInTester is UnitTestHelper {
         // Verify operator's collateralGwei is decremented
         assertEq(operatorData.collateralWei, collateral - gotSlashAmountWei, "collateralWei not decremented");
 
-        // Verify the SlasherCommitment mapping is cleared
+        // Verify the SlasherCommitment was set to slashed
         IRegistry.SlasherCommitment memory slasherCommitment =
             registry.getSlasherCommitment(result.registrationRoot, address(dummySlasher));
 
-        assertEq(slasherCommitment.committer, address(0), "SlasherCommitment not cleared");
-        assertEq(slasherCommitment.optedInAt, 0, "SlasherCommitment not cleared");
-        assertEq(slasherCommitment.optedOutAt, 0, "SlasherCommitment not cleared");
+        assertEq(slasherCommitment.slashed, true, "SlasherCommitment not slashed");
     }
 
     function testRevertOperatorAlreadyUnregistered() public {
