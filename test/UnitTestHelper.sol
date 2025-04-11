@@ -37,15 +37,15 @@ contract UnitTestHelper is Test {
     }
 
     /// @dev Creates a Registration struct with a real BLS keypair
-    function _createRegistration(uint256 secretKey, address owner)
+    function _createSignedRegistration(uint256 secretKey, address owner)
         internal
         view
-        returns (IRegistry.Registration memory)
+        returns (IRegistry.SignedRegistration memory)
     {
         BLS.G1Point memory pubkey = BLS.toPublicKey(secretKey);
         BLS.G2Point memory signature = _registrationSignature(secretKey, owner);
 
-        return IRegistry.Registration({ pubkey: pubkey, signature: signature });
+        return IRegistry.SignedRegistration({ pubkey: pubkey, signature: signature });
     }
 
     /// @dev Helper to verify operator data matches expected values
@@ -65,7 +65,7 @@ contract UnitTestHelper is Test {
         assertEq(operatorData.slashedAt, expectedSlashedAt, "Wrong slashed block");
     }
 
-    function _hashToLeaves(IRegistry.Registration[] memory _registrations, address _owner)
+    function _hashToLeaves(IRegistry.SignedRegistration[] memory _registrations, address _owner)
         internal
         pure
         returns (bytes32[] memory)
@@ -80,10 +80,10 @@ contract UnitTestHelper is Test {
     function _setupSingleRegistration(uint256 secretKey, address owner)
         internal
         view
-        returns (IRegistry.Registration[] memory)
+        returns (IRegistry.SignedRegistration[] memory)
     {
-        IRegistry.Registration[] memory registrations = new IRegistry.Registration[](1);
-        registrations[0] = _createRegistration(secretKey, owner);
+        IRegistry.SignedRegistration[] memory registrations = new IRegistry.SignedRegistration[](1);
+        registrations[0] = _createSignedRegistration(secretKey, owner);
         return registrations;
     }
 
@@ -119,7 +119,7 @@ contract UnitTestHelper is Test {
 
     function basicRegistration(uint256 secretKey, uint256 collateral, address owner)
         public
-        returns (bytes32 registrationRoot, IRegistry.Registration[] memory registrations)
+        returns (bytes32 registrationRoot, IRegistry.SignedRegistration[] memory registrations)
     {
         registrations = _setupSingleRegistration(secretKey, owner);
 
@@ -165,7 +165,7 @@ contract UnitTestHelper is Test {
 
     struct RegisterAndDelegateResult {
         bytes32 registrationRoot;
-        IRegistry.Registration[] registrations;
+        IRegistry.SignedRegistration[] registrations;
         ISlasher.SignedDelegation signedDelegation;
     }
 
@@ -244,7 +244,7 @@ contract ReentrantContract {
     uint256 public errors;
     UnitTestHelper.RegisterAndDelegateParams params;
     ISlasher.SignedDelegation signedDelegation;
-    IRegistry.Registration[1] registrations;
+    IRegistry.SignedRegistration[1] registrations;
     uint16 unregistrationDelay;
 
     ISlasher.SignedCommitment signedCommitment;
@@ -269,7 +269,11 @@ contract ReentrantContract {
         signedDelegationTwo = _signedDelegationTwo;
     }
 
-    function _hashToLeaves(IRegistry.Registration[] memory _registrations) internal pure returns (bytes32[] memory) {
+    function _hashToLeaves(IRegistry.SignedRegistration[] memory _registrations)
+        internal
+        pure
+        returns (bytes32[] memory)
+    {
         bytes32[] memory leaves = new bytes32[](_registrations.length);
         for (uint256 i = 0; i < _registrations.length; i++) {
             leaves[i] = keccak256(abi.encode(_registrations[i]));
@@ -277,7 +281,7 @@ contract ReentrantContract {
         return leaves;
     }
 
-    function register(IRegistry.Registration[] memory _registrations) public {
+    function register(IRegistry.SignedRegistration[] memory _registrations) public {
         require(_registrations.length == 1, "test harness supports only 1 registration");
         registrations[0] = _registrations[0];
         registrationRoot = registry.register{ value: collateral }(_registrations, address(this));
@@ -351,7 +355,7 @@ contract ReentrantSlashableRegistrationContract is ReentrantContract {
         }
 
         // expected re-registering to fail
-        IRegistry.Registration[] memory _registrations = new IRegistry.Registration[](1);
+        IRegistry.SignedRegistration[] memory _registrations = new IRegistry.SignedRegistration[](1);
         _registrations[0] = registrations[0];
         require(_registrations.length == 1, "test harness supports only 1 registration");
         try registry.register{ value: collateral }(_registrations, address(this)) {
@@ -389,7 +393,7 @@ contract ReentrantSlashEquivocation is ReentrantContract {
         }
 
         // Setup proof
-        IRegistry.Registration[] memory _registrations = new IRegistry.Registration[](1);
+        IRegistry.SignedRegistration[] memory _registrations = new IRegistry.SignedRegistration[](1);
         _registrations[0] = registrations[0];
         uint256 leafIndex = 0;
         bytes32[] memory proof; // empty for single leaf

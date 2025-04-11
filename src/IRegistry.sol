@@ -28,7 +28,7 @@ interface IRegistry {
     }
 
     /// @notice A registration of a BLS key
-    struct Registration {
+    struct SignedRegistration {
         /// BLS public key
         BLS.G1Point pubkey;
         /// BLS signature
@@ -194,7 +194,7 @@ interface IRegistry {
      *
      */
 
-    function register(Registration[] calldata registrations, address owner)
+    function register(SignedRegistration[] calldata registrations, address owner)
         external
         payable
         returns (bytes32 registrationRoot);
@@ -207,7 +207,7 @@ interface IRegistry {
 
     function slashRegistration(
         bytes32 registrationRoot,
-        Registration calldata reg,
+        SignedRegistration calldata reg,
         bytes32[] calldata proof,
         uint256 leafIndex
     ) external returns (uint256 collateralWei);
@@ -257,7 +257,7 @@ interface IRegistry {
 
     function getOptedInCommitter(
         bytes32 registrationRoot,
-        Registration calldata reg,
+        SignedRegistration calldata reg,
         bytes32[] calldata proof,
         uint256 leafIndex,
         address slasher

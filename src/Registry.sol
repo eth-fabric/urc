@@ -35,7 +35,7 @@ contract Registry is IRegistry {
      */
 
     /// @notice Batch registers an operator's BLS keys and collateral to the URC
-    /// @dev Registration signatures are optimistically verified. They are expected to be signed with the `DOMAIN_SEPARATOR` mixin.
+    /// @dev SignedRegistration signatures are optimistically verified. They are expected to be signed with the `DOMAIN_SEPARATOR` mixin.
     /// @dev The function will merkleize the supplied `regs` and map the registration root to an Operator struct.
     /// @dev The function will revert if:
     /// @dev - They sent less than `config.minCollateralWei` (InsufficientCollateral)
@@ -44,7 +44,7 @@ contract Registry is IRegistry {
     /// @param regs The BLS keys to register
     /// @param owner The authorized address to perform actions on behalf of the operator
     /// @return registrationRoot The merkle root of the registration
-    function register(Registration[] calldata regs, address owner)
+    function register(SignedRegistration[] calldata regs, address owner)
         external
         payable
         returns (bytes32 registrationRoot)
@@ -55,7 +55,7 @@ contract Registry is IRegistry {
         }
 
         // Include the owner address in the merkleization to prevent frontrunning
-        registrationRoot = _merkleizeRegistrationsWithOwner(regs, owner);
+        registrationRoot = _merkleizeSignedRegistrationsWithOwner(regs, owner);
 
         if (registrationRoot == bytes32(0)) {
             revert InvalidRegistrationRoot();
@@ -225,7 +225,7 @@ contract Registry is IRegistry {
      *
      */
 
-    /// @notice Slash an operator for submitting a fraudulent `Registration` in the register() function
+    /// @notice Slash an operator for submitting a fraudulent `SignedRegistration` in the register() function
     /// @dev To save BLS verification gas costs, the URC optimistically accepts registration signatures. This function allows a challenger to slash the operator by executing the BLS verification to prove the registration is fraudulent.
     /// @dev A successful challenge will transfer `MIN_COLLATERAL / 2` to the challenger, burn `MIN_COLLATERAL / 2`, and then allow the operator to claim their remaining collateral after `SLASH_WINDOW` blocks have elapsed from the `claimSlashedCollateral()` function.
     /// @dev The function will revert if:
@@ -235,13 +235,13 @@ contract Registry is IRegistry {
     /// @dev - The proof is invalid (FraudProofChallengeInvalid)
     /// @dev - ETH transfer to challenger fails (EthTransferFailed)
     /// @param registrationRoot The merkle root generated and stored from the register() function
-    /// @param reg The fraudulent Registration
+    /// @param reg The fraudulent SignedRegistration
     /// @param proof The merkle proof to verify the operator's key is in the registry
     /// @param leafIndex The index of the leaf in the merkle tree
     /// @return slashedCollateralWei The amount of GWEI slashed
     function slashRegistration(
         bytes32 registrationRoot,
-        Registration calldata reg,
+        SignedRegistration calldata reg,
         bytes32[] calldata proof,
         uint256 leafIndex
     ) external returns (uint256 slashedCollateralWei) {
@@ -307,7 +307,7 @@ contract Registry is IRegistry {
     /// @dev - The signed commitment was not signed by the delegated committer (DelegationSignatureInvalid)
     /// @dev - The slash amount exceeds the operator's collateral (SlashAmountExceedsCollateral)
     /// @param registrationRoot The merkle root generated and stored from the register() function
-    /// @param registrationSignature The signature from the operator's previously registered `Registration`
+    /// @param registrationSignature The signature from the operator's previously registered `SignedRegistration`
     /// @param proof The merkle proof to verify the operator's key is in the registry
     /// @param leafIndex The index of the leaf in the merkle tree
     /// @param delegation The SignedDelegation signed by the operator's BLS key
@@ -502,7 +502,7 @@ contract Registry is IRegistry {
     /// @dev - The delegations are for different slots (DifferentSlots)
     /// @dev - ETH transfer to challenger fails (EthTransferFailed)
     /// @param registrationRoot The merkle root generated and stored from the register() function
-    /// @param registrationSignature The signature from the operator's previously registered `Registration`
+    /// @param registrationSignature The signature from the operator's previously registered `SignedRegistration`
     /// @param proof The merkle proof to verify the operator's key is in the registry
     /// @param leafIndex The index of the leaf in the merkle tree
     /// @param delegationOne The first SignedDelegation signed by the operator's BLS key
@@ -833,7 +833,7 @@ contract Registry is IRegistry {
     /// @return collateralWei The collateral amount in WEI (0 if not opted in)
     function getOptedInCommitter(
         bytes32 registrationRoot,
-        Registration calldata reg,
+        SignedRegistration calldata reg,
         bytes32[] calldata proof,
         uint256 leafIndex,
         address slasher
@@ -850,11 +850,11 @@ contract Registry is IRegistry {
      *
      */
 
-    /// @notice Merkleizes an array of `Registration` structs
-    /// @dev Leaves are created by abi-encoding the `Registration` structs with the owner address, then hashing with keccak256.
-    /// @param regs The array of `Registration` structs to merkleize
+    /// @notice Merkleizes an array of `SignedRegistration` structs
+    /// @dev Leaves are created by abi-encoding the `SignedRegistration` structs with the owner address, then hashing with keccak256.
+    /// @param regs The array of `SignedRegistration` structs to merkleize
     /// @return registrationRoot The merkle root of the registration
-    function _merkleizeRegistrationsWithOwner(Registration[] calldata regs, address owner)
+    function _merkleizeSignedRegistrationsWithOwner(SignedRegistration[] calldata regs, address owner)
         internal
         pure
         returns (bytes32 registrationRoot)
@@ -862,7 +862,7 @@ contract Registry is IRegistry {
         // Create leaves array with padding
         bytes32[] memory leaves = new bytes32[](regs.length);
 
-        // Create leaf nodes by hashing Registration structs
+        // Create leaf nodes by hashing SignedRegistration structs
         for (uint256 i = 0; i < regs.length; i++) {
             leaves[i] = keccak256(abi.encode(regs[i], owner));
         }
@@ -895,7 +895,7 @@ contract Registry is IRegistry {
     /// @dev The `signedDelegation.signature` is expected to be the abi-encoded `Delegation` message mixed with the URC's `DELEGATION_DOMAIN_SEPARATOR`.
     /// @dev The function will revert if the delegation message expired, if the delegation signature is invalid, or if the delegation is not signed by the operator's BLS key.
     /// @param registrationRoot The merkle root generated and stored from the register() function
-    /// @param registrationSignature The signature from the operator's previously registered `Registration`
+    /// @param registrationSignature The signature from the operator's previously registered `SignedRegistration`
     /// @param proof The merkle proof to verify the operator's key is in the registry
     /// @param leafIndex The index of the leaf in the merkle tree
     /// @param delegation The SignedDelegation signed by the operator's BLS key
@@ -909,8 +909,8 @@ contract Registry is IRegistry {
         address owner
     ) internal view returns (uint256 collateralWei) {
         // Reconstruct leaf using pubkey in SignedDelegation to check equivalence
-        Registration memory reg =
-            Registration({ pubkey: delegation.delegation.proposer, signature: registrationSignature });
+        SignedRegistration memory reg =
+            SignedRegistration({ pubkey: delegation.delegation.proposer, signature: registrationSignature });
         bytes32 leaf = keccak256(abi.encode(reg, owner));
 
         collateralWei = _verifyMerkleProof(registrationRoot, leaf, proof, leafIndex);
