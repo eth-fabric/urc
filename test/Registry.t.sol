@@ -462,9 +462,9 @@ contract AddCollateralTester is UnitTestHelper {
         assertEq(operatorData.collateralWei, uint80(collateral), "Collateral should not be changed");
     }
 
-    function test_addCollateral_notRegistered() public {
+    function test_addCollateral_noCollateral() public {
         bytes32 registrationRoot = bytes32(uint256(0));
-        vm.expectRevert(IRegistry.NotRegisteredKey.selector);
+        vm.expectRevert(IRegistry.NoCollateral.selector);
         registry.addCollateral{ value: 1 gwei }(registrationRoot);
     }
 }

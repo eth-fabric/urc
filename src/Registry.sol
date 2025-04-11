@@ -595,8 +595,9 @@ contract Registry is IRegistry {
             revert OperatorDeleted();
         }
 
+        // Zero collateral implies they were previously slashed to 0 or did not exist and must re-register
         if (operator.collateralWei == 0) {
-            revert NotRegisteredKey();
+            revert NoCollateral();
         }
 
         if (msg.value > type(uint80).max) {
@@ -646,11 +647,6 @@ contract Registry is IRegistry {
         // Check that the operator has not been slashed
         if (operator.slashedAt != 0) {
             revert SlashingAlreadyOccurred();
-        }
-
-        // Check there's collateral to claim
-        if (collateralWei == 0) {
-            revert NoCollateralToClaim();
         }
 
         // Prevent the Operator from being reused
