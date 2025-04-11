@@ -266,4 +266,6 @@ interface IRegistry {
     function getConfig() external view returns (Config memory config);
 
     function getOperatorData(bytes32 registrationRoot) external view returns (OperatorData memory operatorData);
+
+    function slashingEvidenceAlreadyUsed(bytes32 slashingDigest) external view returns (bool);
 }

@@ -12,10 +12,10 @@ contract Registry is IRegistry {
     using BLS for *;
 
     /// @notice Mapping from registration merkle roots to Operator structs
-    mapping(bytes32 registrationRoot => Operator) public operators;
+    mapping(bytes32 registrationRoot => Operator) private operators;
 
     /// @notice Mapping to track if a slashing has occurred before with same input
-    mapping(bytes32 slashingDigest => bool) public slashedBefore;
+    mapping(bytes32 slashingDigest => bool) private slashedBefore;
 
     // Constants
     address internal constant BURNER_ADDRESS = address(0x0000000000000000000000000000000000000000);
@@ -842,6 +842,14 @@ contract Registry is IRegistry {
         slasherCommitment = operator.slasherCommitments[slasher];
 
         collateralWei = _verifyMerkleProof(registrationRoot, keccak256(abi.encode(reg)), proof, leafIndex);
+    }
+
+    /// @notice Checks if a slashing has already occurred with the same input
+    /// @dev The getter for the `slashedBefore` mapping
+    /// @param slashingDigest The digest of the slashing evidence
+    /// @return True if the slashing has already occurred, false otherwise
+    function slashingEvidenceAlreadyUsed(bytes32 slashingDigest) external view returns (bool) {
+        return slashedBefore[slashingDigest];
     }
 
     /**
