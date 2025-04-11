@@ -38,7 +38,7 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
 
     function setUp() public {
         vm.createSelectFork(vm.rpcUrl("mainnet"));
-        registry = new Registry();
+        registry = new Registry(defaultConfig());
         slasher = new InclusionPreconfSlasher(slashAmountWei, address(registry));
         delegatePubKey = BLS.toPublicKey(SECRET_KEY_2);
         (committer, committerSecretKey) = makeAddrAndKey("commitmentsKey");
@@ -83,8 +83,8 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
         uint256 inclusionBlockNumber = 20_785_012;
 
         // Advance before the fraud proof window
-        vm.roll(inclusionBlockNumber - registry.FRAUD_PROOF_WINDOW());
-        vm.warp(inclusionBlockNumber - registry.FRAUD_PROOF_WINDOW() * 12);
+        vm.roll(inclusionBlockNumber - registry.getConfig().fraudProofWindow);
+        vm.warp(inclusionBlockNumber - registry.getConfig().fraudProofWindow * 12);
 
         // Register and delegate
         result = setupRegistration(operator, delegate, 9994114 - 100);
@@ -172,8 +172,8 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
         vm.deal(alice, 100 ether);
 
         // Set block to before fraud proof window
-        vm.roll(inclusionBlockNumber - registry.FRAUD_PROOF_WINDOW());
-        vm.warp(inclusionBlockNumber - registry.FRAUD_PROOF_WINDOW() * 12);
+        vm.roll(inclusionBlockNumber - registry.getConfig().fraudProofWindow);
+        vm.warp(inclusionBlockNumber - registry.getConfig().fraudProofWindow * 12);
 
         // Register with a soon-to-expire delegation
         bytes memory metadata = abi.encode(delegate);

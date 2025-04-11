@@ -13,6 +13,20 @@ interface IRegistry {
      *
      */
 
+    /// @notice A struct to track the configuration of the registry
+    struct Config {
+        /// The minimum collateral required to register
+        uint80 minCollateralWei;
+        /// The fraud proof window
+        uint32 fraudProofWindow;
+        /// The unregistration delay
+        uint32 unregistrationDelay;
+        /// The slash window
+        uint32 slashWindow;
+        /// The opt-in delay
+        uint32 optInDelay;
+    }
+
     /// @notice A registration of a BLS key
     struct Registration {
         /// BLS public key

@@ -18,14 +18,20 @@ contract Registry is IRegistry {
     mapping(bytes32 slashingDigest => bool) public slashedBefore;
 
     // Constants
-    uint256 public constant MIN_COLLATERAL = 0.1 ether;
-    uint256 public constant UNREGISTRATION_DELAY = 7200; // 1 day
-    uint256 public constant FRAUD_PROOF_WINDOW = 7200; // 1 day
-    uint32 public constant SLASH_WINDOW = 7200; // 1 day
-    uint32 public constant OPT_IN_DELAY = 7200; // 1 day
+    // uint256 public constant MIN_COLLATERAL = 0.1 ether;
+    // uint256 public constant UNREGISTRATION_DELAY = 7200; // 1 day
+    // uint256 public constant FRAUD_PROOF_WINDOW = 7200; // 1 day
+    // uint32 public constant SLASH_WINDOW = 7200; // 1 day
+    // uint32 public constant OPT_IN_DELAY = 7200; // 1 day
     address internal constant BURNER_ADDRESS = address(0x0000000000000000000000000000000000000000);
     bytes public constant REGISTRATION_DOMAIN_SEPARATOR = "0x00555243"; // "URC" in little endian
     bytes public constant DELEGATION_DOMAIN_SEPARATOR = "0x0044656c"; // "Del" in little endian
+
+    Config private config;
+
+    constructor(Config memory _config) {
+        config = _config;
+    }
 
     /**
      *
@@ -37,7 +43,7 @@ contract Registry is IRegistry {
     /// @dev Registration signatures are optimistically verified. They are expected to be signed with the `DOMAIN_SEPARATOR` mixin.
     /// @dev The function will merkleize the supplied `regs` and map the registration root to an Operator struct.
     /// @dev The function will revert if:
-    /// @dev - They sent less than `MIN_COLLATERAL` (InsufficientCollateral)
+    /// @dev - They sent less than `config.minCollateralWei` (InsufficientCollateral)
     /// @dev - The operator has already registered the same `regs` (OperatorAlreadyRegistered)
     /// @dev - The registration root is invalid (InvalidRegistrationRoot)
     /// @param regs The BLS keys to register
@@ -49,7 +55,7 @@ contract Registry is IRegistry {
         returns (bytes32 registrationRoot)
     {
         // At least MIN_COLLATERAL for sufficient reward for fraud/equivocation challenges
-        if (msg.value < MIN_COLLATERAL) {
+        if (msg.value < config.minCollateralWei) {
             revert InsufficientCollateral();
         }
 
@@ -149,7 +155,7 @@ contract Registry is IRegistry {
         }
 
         // Operator cannot opt in before the fraud proof window elapses
-        if (block.number < operator.registeredAt + FRAUD_PROOF_WINDOW) {
+        if (block.number < operator.registeredAt + config.fraudProofWindow) {
             revert FraudProofWindowNotMet();
         }
 
@@ -168,7 +174,7 @@ contract Registry is IRegistry {
 
         // Fix: If previously opted out, enforce delay before allowing new opt-in
         // Changed from block.timestamp to block.number to match the optedOutAt type
-        if (slasherCommitment.optedOutAt != 0 && block.number < slasherCommitment.optedOutAt + OPT_IN_DELAY) {
+        if (slasherCommitment.optedOutAt != 0 && block.number < slasherCommitment.optedOutAt + config.optInDelay) {
             revert OptInDelayNotMet();
         }
 
@@ -208,7 +214,7 @@ contract Registry is IRegistry {
         }
 
         // Enforce a delay before allowing opt-out
-        if (block.number < slasherCommitment.optedInAt + OPT_IN_DELAY) {
+        if (block.number < slasherCommitment.optedInAt + config.optInDelay) {
             revert OptInDelayNotMet();
         }
 
@@ -254,7 +260,7 @@ contract Registry is IRegistry {
         }
 
         // Can only slash registrations within the fraud proof window
-        if (block.number > operator.registeredAt + FRAUD_PROOF_WINDOW) {
+        if (block.number > operator.registeredAt + config.fraudProofWindow) {
             revert FraudProofWindowExpired();
         }
 
@@ -281,14 +287,16 @@ contract Registry is IRegistry {
         }
 
         // Decrement operator's collateral
-        operator.collateralWei -= uint80(MIN_COLLATERAL);
+        operator.collateralWei -= uint80(config.minCollateralWei);
 
         // Burn half of the MIN_COLLATERAL amount and reward the challenger the other half
-        _rewardAndBurn(MIN_COLLATERAL / 2, msg.sender);
+        _rewardAndBurn(config.minCollateralWei / 2, msg.sender);
 
-        emit OperatorSlashed(SlashingType.Fraud, registrationRoot, owner, msg.sender, address(this), MIN_COLLATERAL / 2);
+        emit OperatorSlashed(
+            SlashingType.Fraud, registrationRoot, owner, msg.sender, address(this), config.minCollateralWei / 2
+        );
 
-        return MIN_COLLATERAL;
+        return config.minCollateralWei;
     }
 
     /// @notice Slashes an operator for breaking a commitment
@@ -334,20 +342,21 @@ contract Registry is IRegistry {
         }
 
         // Operator is not liable for slashings before the fraud proof window elapses
-        if (block.number < operator.registeredAt + FRAUD_PROOF_WINDOW) {
+        if (block.number < operator.registeredAt + config.fraudProofWindow) {
             revert FraudProofWindowNotMet();
         }
 
         // Operator is not liable for slashings after unregister and the delay has passed
         if (
-            operator.unregisteredAt != type(uint48).max && block.number > operator.unregisteredAt + UNREGISTRATION_DELAY
+            operator.unregisteredAt != type(uint48).max
+                && block.number > operator.unregisteredAt + config.unregistrationDelay
         ) {
             revert OperatorAlreadyUnregistered();
         }
 
         // Slashing can only occur within the slash window after the first reported slashing
         // After the slash window has passed, the operator can claim collateral
-        if (operator.slashedAt != 0 && block.number > operator.slashedAt + SLASH_WINDOW) {
+        if (operator.slashedAt != 0 && block.number > operator.slashedAt + config.slashWindow) {
             revert SlashWindowExpired();
         }
 
@@ -425,20 +434,21 @@ contract Registry is IRegistry {
         address slasher = commitment.commitment.slasher;
 
         // Operator is not liable for slashings before the fraud proof window elapses
-        if (block.number < operator.registeredAt + FRAUD_PROOF_WINDOW) {
+        if (block.number < operator.registeredAt + config.fraudProofWindow) {
             revert FraudProofWindowNotMet();
         }
 
         // Operator is not liable for slashings after unregister and the delay has passed
         if (
-            operator.unregisteredAt != type(uint48).max && block.number > operator.unregisteredAt + UNREGISTRATION_DELAY
+            operator.unregisteredAt != type(uint48).max
+                && block.number > operator.unregisteredAt + config.unregistrationDelay
         ) {
             revert OperatorAlreadyUnregistered();
         }
 
         // Slashing can only occur within the slash window after the first reported slashing
         // After the slash window has passed, the operator can claim collateral
-        if (operator.slashedAt != 0 && block.number > operator.slashedAt + SLASH_WINDOW) {
+        if (operator.slashedAt != 0 && block.number > operator.slashedAt + config.slashWindow) {
             revert SlashWindowExpired();
         }
 
@@ -533,20 +543,21 @@ contract Registry is IRegistry {
         }
 
         // Operator is not liable for slashings before the fraud proof window elapses
-        if (block.number < operator.registeredAt + FRAUD_PROOF_WINDOW) {
+        if (block.number < operator.registeredAt + config.fraudProofWindow) {
             revert FraudProofWindowNotMet();
         }
 
         // Operator is not liable for slashings after unregister and the delay has passed
         if (
-            operator.unregisteredAt != type(uint48).max && block.number > operator.unregisteredAt + UNREGISTRATION_DELAY
+            operator.unregisteredAt != type(uint48).max
+                && block.number > operator.unregisteredAt + config.unregistrationDelay
         ) {
             revert OperatorAlreadyUnregistered();
         }
 
         // Slashing can only occur within the slash window after the first reported slashing
         // After the slash window has passed, the operator can claim collateral
-        if (operator.slashedAt != 0 && block.number > operator.slashedAt + SLASH_WINDOW) {
+        if (operator.slashedAt != 0 && block.number > operator.slashedAt + config.slashWindow) {
             revert SlashWindowExpired();
         }
 
@@ -568,13 +579,18 @@ contract Registry is IRegistry {
         }
 
         // Decrement operator's collateral
-        operator.collateralWei -= uint80(MIN_COLLATERAL);
+        operator.collateralWei -= uint80(config.minCollateralWei);
 
         // Burn half of the MIN_COLLATERAL amount and reward the challenger the other half
-        _rewardAndBurn(MIN_COLLATERAL / 2, msg.sender);
+        _rewardAndBurn(config.minCollateralWei / 2, msg.sender);
 
         emit OperatorSlashed(
-            SlashingType.Equivocation, registrationRoot, operator.owner, msg.sender, address(this), MIN_COLLATERAL
+            SlashingType.Equivocation,
+            registrationRoot,
+            operator.owner,
+            msg.sender,
+            address(this),
+            config.minCollateralWei
         );
 
         return slashAmountWei;
@@ -645,7 +661,7 @@ contract Registry is IRegistry {
         }
 
         // Check that enough time has passed
-        if (block.number < operator.unregisteredAt + UNREGISTRATION_DELAY) {
+        if (block.number < operator.unregisteredAt + config.unregistrationDelay) {
             revert UnregistrationDelayNotMet();
         }
 
@@ -692,7 +708,7 @@ contract Registry is IRegistry {
         }
 
         // Check that enough time has passed
-        if (block.number < operator.slashedAt + SLASH_WINDOW) {
+        if (block.number < operator.slashedAt + config.slashWindow) {
             revert SlashWindowNotMet();
         }
 
@@ -754,6 +770,12 @@ contract Registry is IRegistry {
      *                                Getter Functions                           *
      *
      */
+
+    /// @notice Get the configuration of the registry
+    /// @return config The configuration of the registry
+    function getConfig() external view returns (Config memory) {
+        return config;
+    }
 
     /// @notice Verify a merkle proof against a given `registrationRoot`
     /// @dev The function will return the operator's collateral amount if the proof is valid or 0 if the proof is invalid.

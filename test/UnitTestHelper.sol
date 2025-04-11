@@ -20,6 +20,16 @@ contract UnitTestHelper is Test {
     uint256 constant SECRET_KEY_1 = 12345;
     uint256 constant SECRET_KEY_2 = 67890;
 
+    function defaultConfig() internal view returns (IRegistry.Config memory) {
+        return IRegistry.Config({
+            minCollateralWei: 0.1 ether,
+            fraudProofWindow: 7200,
+            unregistrationDelay: 7200,
+            slashWindow: 7200,
+            optInDelay: 7200
+        });
+    }
+
     /// @dev Helper to create a BLS signature for a registration
     function _registrationSignature(uint256 secretKey, address owner) internal view returns (BLS.G2Point memory) {
         bytes memory message = abi.encode(owner);

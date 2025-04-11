@@ -39,7 +39,7 @@ contract StateLockSlasherTest is UnitTestHelper, PreconfStructs {
     function setUp() public {
         vm.createSelectFork(vm.rpcUrl("mainnet"));
         slasher = new StateLockSlasher(slashAmountWei);
-        registry = new Registry();
+        registry = new Registry(defaultConfig());
         (committer, committerSecretKey) = makeAddrAndKey("commitmentsKey");
         delegatePubKey = BLS.toPublicKey(SECRET_KEY_2);
         vm.deal(committer, 100 ether);
@@ -141,8 +141,8 @@ contract StateLockSlasherTest is UnitTestHelper, PreconfStructs {
         vm.deal(alice, 100 ether); // Give alice some ETH
 
         // Advance before the fraud proof window
-        vm.roll(exclusionBlockNumber - registry.FRAUD_PROOF_WINDOW());
-        vm.warp(exclusionBlockNumber - registry.FRAUD_PROOF_WINDOW() * 12);
+        vm.roll(exclusionBlockNumber - registry.getConfig().fraudProofWindow);
+        vm.warp(exclusionBlockNumber - registry.getConfig().fraudProofWindow * 12);
 
         // Register and delegate
         result = setupRegistration(alice, delegate, 9994114 - 100);
