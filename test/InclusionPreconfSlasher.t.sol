@@ -251,7 +251,7 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
         _verifySlashCommitmentBalances(challenger, slashAmountWei, 0, challengerBalanceBefore, urcBalanceBefore);
 
         // Retrieve operator data
-        OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
+        IRegistry.OperatorData memory operatorData = registry.getOperatorData(result.registrationRoot);
 
         // Verify operator's slashedAt is set
         assertEq(operatorData.slashedAt, block.number, "slashedAt not set");

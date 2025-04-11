@@ -173,7 +173,7 @@ contract UnregisterTester is UnitTestHelper {
         emit IRegistry.OperatorUnregistered(registrationRoot);
         registry.unregister(registrationRoot);
 
-        OperatorData memory operatorData = getRegistrationData(registrationRoot);
+        IRegistry.OperatorData memory operatorData = registry.getOperatorData(registrationRoot);
         assertEq(operatorData.unregisteredAt, uint48(block.number), "Wrong unregistration block");
         assertEq(operatorData.registeredAt, uint48(block.number), "Wrong registration block"); // Should remain unchanged
     }
@@ -358,7 +358,7 @@ contract ClaimCollateralTester is UnitTestHelper {
         assertEq(operator.balance, balanceBefore + collateral, "Collateral not returned");
 
         // Verify registration was deleted
-        assertEq(getRegistrationData(registrationRoot).deleted, true, "Registration not deleted");
+        assertEq(registry.getOperatorData(registrationRoot).deleted, true, "Registration not deleted");
     }
 
     function test_claimCollateral_notUnregistered() public {
@@ -440,8 +440,9 @@ contract AddCollateralTester is UnitTestHelper {
         emit IRegistry.CollateralAdded(registrationRoot, expectedCollateralWei);
         registry.addCollateral{ value: addAmount }(registrationRoot);
 
-        OperatorData memory operatorData = getRegistrationData(registrationRoot);
-        assertEq(operatorData.collateralWei, expectedCollateralWei, "Collateral not added");
+        assertEq(
+            registry.getOperatorData(registrationRoot).collateralWei, expectedCollateralWei, "Collateral not added"
+        );
     }
 
     function test_addCollateral_overflow() public {
@@ -458,8 +459,11 @@ contract AddCollateralTester is UnitTestHelper {
         vm.expectRevert(IRegistry.CollateralOverflow.selector);
         registry.addCollateral{ value: addAmount }(registrationRoot);
 
-        OperatorData memory operatorData = getRegistrationData(registrationRoot);
-        assertEq(operatorData.collateralWei, uint80(collateral), "Collateral should not be changed");
+        assertEq(
+            registry.getOperatorData(registrationRoot).collateralWei,
+            uint80(collateral),
+            "Collateral should not be changed"
+        );
     }
 
     function test_addCollateral_noCollateral() public {
@@ -527,7 +531,7 @@ contract SlashRegistrationTester is UnitTestHelper {
         );
 
         // ensure operator was deleted
-        assertEq(getRegistrationData(registrationRoot).deleted, true, "operator was not deleted");
+        assertEq(registry.getOperatorData(registrationRoot).deleted, true, "operator was not deleted");
     }
 
     function test_slashRegistrationHeight1_DifferentOwner() public {
@@ -583,7 +587,7 @@ contract SlashRegistrationTester is UnitTestHelper {
         );
 
         // ensure operator was deleted
-        assertEq(getRegistrationData(registrationRoot).deleted, true, "operator was not deleted");
+        assertEq(registry.getOperatorData(registrationRoot).deleted, true, "operator was not deleted");
     }
 
     function test_slashRegistrationHeight2_DifferentOwner() public {
@@ -677,7 +681,7 @@ contract SlashRegistrationTester is UnitTestHelper {
             urcBalanceBefore
         );
 
-        assertEq(getRegistrationData(registrationRoot).deleted, true, "operator was not deleted");
+        assertEq(registry.getOperatorData(registrationRoot).deleted, true, "operator was not deleted");
     }
 }
 
@@ -726,7 +730,9 @@ contract RentrancyTester is UnitTestHelper {
         );
 
         // Verify registration was deleted
-        assertEq(getRegistrationData(reentrantContract.registrationRoot()).deleted, true, "operator was not deleted");
+        assertEq(
+            registry.getOperatorData(reentrantContract.registrationRoot()).deleted, true, "operator was not deleted"
+        );
     }
 
     // For setup we register() -> slashRegistration()

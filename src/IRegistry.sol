@@ -35,8 +35,9 @@ interface IRegistry {
         BLS.G2Point signature;
     }
 
-    /// @notice An operator of BLS key[s]
-    struct Operator {
+    /// @notice Data about an operator
+    /// @dev Since mappings cannot be returned from a contract, this struct is used to return operator data
+    struct OperatorData {
         /// The authorized address of the operator
         address owner;
         /// ETH collateral in WEI
@@ -53,6 +54,12 @@ interface IRegistry {
         bool deleted;
         /// Whether the operator has equivocated or not
         bool equivocated;
+    }
+
+    /// @notice An operator of BLS key[s]
+    struct Operator {
+        /// The data about the operator
+        OperatorData data;
         /// Mapping to track opt-in and opt-out status for proposer commitment protocols
         mapping(address slasher => SlasherCommitment) slasherCommitments;
         /// Historical collateral records
@@ -255,4 +262,8 @@ interface IRegistry {
         uint256 leafIndex,
         address slasher
     ) external view returns (SlasherCommitment memory slasherCommitment, uint256 collateralWei);
+
+    function getConfig() external view returns (Config memory config);
+
+    function getOperatorData(bytes32 registrationRoot) external view returns (OperatorData memory operatorData);
 }

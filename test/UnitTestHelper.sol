@@ -20,7 +20,7 @@ contract UnitTestHelper is Test {
     uint256 constant SECRET_KEY_1 = 12345;
     uint256 constant SECRET_KEY_2 = 67890;
 
-    function defaultConfig() internal view returns (IRegistry.Config memory) {
+    function defaultConfig() internal pure returns (IRegistry.Config memory) {
         return IRegistry.Config({
             minCollateralWei: 0.1 ether,
             fraudProofWindow: 7200,
@@ -56,8 +56,8 @@ contract UnitTestHelper is Test {
         uint48 expectedRegisteredAt,
         uint48 expectedUnregisteredAt,
         uint48 expectedSlashedAt
-    ) internal view {
-        OperatorData memory operatorData = getRegistrationData(registrationRoot);
+    ) internal {
+        IRegistry.OperatorData memory operatorData = registry.getOperatorData(registrationRoot);
         assertEq(operatorData.owner, expectedOwner, "Wrong withdrawal address");
         assertEq(operatorData.collateralWei, expectedCollateral, "Wrong collateral amount");
         assertEq(operatorData.registeredAt, expectedRegisteredAt, "Wrong registration block");
@@ -96,7 +96,7 @@ contract UnitTestHelper is Test {
         uint256 _challengerBalanceBefore,
         uint256 _operatorBalanceBefore,
         uint256 _urcBalanceBefore
-    ) internal view {
+    ) internal {
         assertEq(_challenger.balance, _challengerBalanceBefore + _rewardAmount, "challenger didn't receive reward");
         assertEq(
             _operator.balance,
@@ -112,44 +112,9 @@ contract UnitTestHelper is Test {
         uint256 _rewardAmount,
         uint256 _challengerBalanceBefore,
         uint256 _urcBalanceBefore
-    ) internal view {
+    ) internal {
         assertEq(_challenger.balance, _challengerBalanceBefore + _rewardAmount, "challenger didn't receive reward");
         assertEq(address(registry).balance, _urcBalanceBefore - _slashedAmount - _rewardAmount, "urc balance incorrect");
-    }
-
-    struct OperatorData {
-        address owner;
-        uint80 collateralWei;
-        uint16 numKeys;
-        uint48 registeredAt;
-        uint48 unregisteredAt;
-        uint48 slashedAt;
-        bool deleted;
-        bool equivocated;
-    }
-
-    function getRegistrationData(bytes32 registrationRoot) public view returns (OperatorData memory) {
-        (
-            address owner,
-            uint80 collateralWei,
-            uint16 numKeys,
-            uint48 registeredAt,
-            uint48 unregisteredAt,
-            uint48 slashedAt,
-            bool deleted,
-            bool equivocated
-        ) = registry.registrations(registrationRoot);
-
-        return OperatorData({
-            owner: owner,
-            collateralWei: collateralWei,
-            numKeys: numKeys,
-            registeredAt: registeredAt,
-            unregisteredAt: unregisteredAt,
-            slashedAt: slashedAt,
-            deleted: deleted,
-            equivocated: equivocated
-        });
     }
 
     function basicRegistration(uint256 secretKey, uint256 collateral, address owner)

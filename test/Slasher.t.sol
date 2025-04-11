@@ -101,7 +101,7 @@ contract SlashCommitmentTester is UnitTestHelper {
 
         _verifySlashCommitmentBalances(challenger, gotSlashAmountWei, 0, challengerBalanceBefore, urcBalanceBefore);
 
-        OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
+        IRegistry.OperatorData memory operatorData = registry.getOperatorData(result.registrationRoot);
 
         // Verify operator's slashedAt is set
         assertEq(operatorData.slashedAt, block.number, "slashedAt not set");
@@ -300,7 +300,7 @@ contract SlashCommitmentTester is UnitTestHelper {
             evidence
         );
 
-        OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
+        IRegistry.OperatorData memory operatorData = registry.getOperatorData(result.registrationRoot);
 
         // attempt to claim collateral
         vm.expectRevert(IRegistry.SlashWindowNotMet.selector);
@@ -350,7 +350,7 @@ contract SlashCommitmentTester is UnitTestHelper {
         );
 
         // verify operator was deleted
-        assertEq(getRegistrationData(result.registrationRoot).deleted, true, "operator was not deleted");
+        assertEq(registry.getOperatorData(result.registrationRoot).deleted, true, "operator was not deleted");
     }
 
     // test multiple slashings
@@ -421,11 +421,9 @@ contract SlashCommitmentTester is UnitTestHelper {
             evidence
         );
 
-        OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
-
         // verify operator's collateralGwei is decremented by 2 slashings
         assertEq(
-            operatorData.collateralWei,
+            registry.getOperatorData(result.registrationRoot).collateralWei,
             collateral - 2 * dummySlasher.SLASH_AMOUNT_WEI(),
             "collateralGwei not decremented"
         );
@@ -494,7 +492,7 @@ contract SlashCommitmentFromOptInTester is UnitTestHelper {
 
         _verifySlashCommitmentBalances(challenger, gotSlashAmountWei, 0, challengerBalanceBefore, urcBalanceBefore);
 
-        OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
+        IRegistry.OperatorData memory operatorData = registry.getOperatorData(result.registrationRoot);
 
         // Verify operator's slashedAt is set
         assertEq(operatorData.slashedAt, block.number, "slashedAt not set");
@@ -750,7 +748,7 @@ contract SlashEquivocationTester is UnitTestHelper {
             signedDelegationTwo
         );
 
-        OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
+        IRegistry.OperatorData memory operatorData = registry.getOperatorData(result.registrationRoot);
 
         // verify operator's collateralGwei is decremented by MIN_COLLATERAL
         assertEq(
@@ -1090,7 +1088,7 @@ contract SlashReentrantTester is UnitTestHelper {
 
         uint256 challengerBalanceBefore = challenger.balance;
         uint256 urcBalanceBefore = address(registry).balance;
-        uint80 operatorCollateralWeiBefore = getRegistrationData(result.registrationRoot).collateralWei;
+        uint80 operatorCollateralWeiBefore = registry.getOperatorData(result.registrationRoot).collateralWei;
 
         // Sign a second delegation to equivocate
         ISlasher.SignedDelegation memory signedDelegationTwo = signDelegation(
@@ -1124,7 +1122,7 @@ contract SlashReentrantTester is UnitTestHelper {
             signedDelegationTwo
         );
 
-        OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
+        IRegistry.OperatorData memory operatorData = registry.getOperatorData(result.registrationRoot);
 
         // verify operator's collateralGwei is decremented by MIN_COLLATERAL
         assertEq(
@@ -1218,7 +1216,7 @@ contract SlashConditionTester is UnitTestHelper {
         vm.stopPrank();
 
         // Verify operator was slashed
-        OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
+        IRegistry.OperatorData memory operatorData = registry.getOperatorData(result.registrationRoot);
         assertEq(operatorData.slashedAt, block.number, "operator not slashed");
 
         // Try to unregister after being slashed
@@ -1279,7 +1277,7 @@ contract SlashConditionTester is UnitTestHelper {
         vm.stopPrank();
 
         // Verify operator was slashed
-        OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
+        IRegistry.OperatorData memory operatorData = registry.getOperatorData(result.registrationRoot);
         assertEq(operatorData.slashedAt, block.number, "operator not slashed");
         assertEq(operatorData.equivocated, true, "operator not equivocated");
 
