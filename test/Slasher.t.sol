@@ -65,9 +65,7 @@ contract SlashCommitmentTester is UnitTestHelper {
             basicCommitment(params.committerSecretKey, params.slasher, "");
 
         // Setup proof
-        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
-        uint256 leafIndex = 0;
-        bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
+        IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(result.registrations, operator, 0);
         bytes memory evidence = "";
 
         // skip past fraud proof window
@@ -87,15 +85,7 @@ contract SlashCommitmentTester is UnitTestHelper {
             dummySlasher.SLASH_AMOUNT_WEI()
         );
 
-        uint256 gotSlashAmountWei = registry.slashCommitment(
-            result.registrationRoot,
-            result.registrations[leafIndex].signature,
-            proof,
-            leafIndex,
-            result.signedDelegation,
-            signedCommitment,
-            evidence
-        );
+        uint256 gotSlashAmountWei = registry.slashCommitment(proof, result.signedDelegation, signedCommitment, evidence);
 
         assertEq(dummySlasher.SLASH_AMOUNT_WEI(), gotSlashAmountWei, "Slash amount incorrect");
 
@@ -134,22 +124,12 @@ contract SlashCommitmentTester is UnitTestHelper {
         ISlasher.SignedCommitment memory signedCommitment =
             basicCommitment(params.committerSecretKey, params.slasher, "");
 
-        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
-        uint256 leafIndex = 0;
-        bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
+        IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(result.registrations, operator, 0);
         bytes memory evidence = "";
 
         // Try to slash before fraud proof window expires
         vm.expectRevert(IRegistry.FraudProofWindowNotMet.selector);
-        registry.slashCommitment(
-            result.registrationRoot,
-            result.registrations[leafIndex].signature,
-            proof,
-            leafIndex,
-            result.signedDelegation,
-            signedCommitment,
-            evidence
-        );
+        registry.slashCommitment(proof, result.signedDelegation, signedCommitment, evidence);
     }
 
     function testRevertInvalidProof() public {
@@ -169,22 +149,18 @@ contract SlashCommitmentTester is UnitTestHelper {
         ISlasher.SignedCommitment memory signedCommitment =
             basicCommitment(params.committerSecretKey, params.slasher, "");
 
-        // Create invalid proof
-        bytes32[] memory invalidProof = new bytes32[](1);
-        invalidProof[0] = bytes32(0);
+        // Create invalid proof,
+        IRegistry.RegistrationProof memory proof = IRegistry.RegistrationProof({
+            registrationRoot: result.registrationRoot,
+            registration: result.registrations[0],
+            merkleProof: new bytes32[](1),
+            leafIndex: 0
+        });
 
         vm.roll(block.timestamp + registry.getConfig().fraudProofWindow + 1);
 
         vm.expectRevert(IRegistry.InvalidProof.selector);
-        registry.slashCommitment(
-            result.registrationRoot,
-            result.registrations[0].signature,
-            invalidProof,
-            0,
-            result.signedDelegation,
-            signedCommitment,
-            ""
-        );
+        registry.slashCommitment(proof, result.signedDelegation, signedCommitment, "");
     }
 
     function testRevertDelegationSignatureInvalid() public {
@@ -209,22 +185,12 @@ contract SlashCommitmentTester is UnitTestHelper {
         ISlasher.SignedDelegation memory badSignedDelegation =
             signDelegation(SECRET_KEY_2, result.signedDelegation.delegation);
 
-        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
-        uint256 leafIndex = 0;
-        bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
+        IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(result.registrations, operator, 0);
 
         vm.roll(block.timestamp + registry.getConfig().fraudProofWindow + 1);
 
         vm.expectRevert(IRegistry.DelegationSignatureInvalid.selector);
-        registry.slashCommitment(
-            result.registrationRoot,
-            result.registrations[leafIndex].signature,
-            proof,
-            leafIndex,
-            badSignedDelegation,
-            signedCommitment,
-            ""
-        );
+        registry.slashCommitment(proof, badSignedDelegation, signedCommitment, "");
     }
 
     function testRevertSlashAmountExceedsCollateral() public {
@@ -244,23 +210,13 @@ contract SlashCommitmentTester is UnitTestHelper {
         ISlasher.SignedCommitment memory signedCommitment =
             basicCommitment(params.committerSecretKey, params.slasher, "");
 
-        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
-        uint256 leafIndex = 0;
-        bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
+        IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(result.registrations, operator, 0);
 
         vm.roll(block.timestamp + registry.getConfig().fraudProofWindow + 1);
 
         vm.startPrank(challenger);
         vm.expectRevert(IRegistry.SlashAmountExceedsCollateral.selector);
-        registry.slashCommitment(
-            result.registrationRoot,
-            result.registrations[leafIndex].signature,
-            proof,
-            leafIndex,
-            result.signedDelegation,
-            signedCommitment,
-            ""
-        );
+        registry.slashCommitment(proof, result.signedDelegation, signedCommitment, "");
     }
 
     function testClaimAfterSlash() public {
@@ -281,24 +237,14 @@ contract SlashCommitmentTester is UnitTestHelper {
             basicCommitment(params.committerSecretKey, params.slasher, "");
 
         // Setup proof
-        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
-        uint256 leafIndex = 0;
-        bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
+        IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(result.registrations, operator, 0);
         bytes memory evidence = "";
 
         // skip past fraud proof window
         vm.roll(block.timestamp + registry.getConfig().fraudProofWindow + 1);
 
         vm.startPrank(challenger);
-        registry.slashCommitment(
-            result.registrationRoot,
-            result.registrations[leafIndex].signature,
-            proof,
-            leafIndex,
-            result.signedDelegation,
-            signedCommitment,
-            evidence
-        );
+        registry.slashCommitment(proof, result.signedDelegation, signedCommitment, evidence);
 
         IRegistry.OperatorData memory operatorData = registry.getOperatorData(result.registrationRoot);
 
@@ -313,28 +259,12 @@ contract SlashCommitmentTester is UnitTestHelper {
         // attempt to slash with same evidence
         vm.startPrank(challenger);
         vm.expectRevert(IRegistry.SlashingAlreadyOccurred.selector);
-        registry.slashCommitment(
-            result.registrationRoot,
-            result.registrations[leafIndex].signature,
-            proof,
-            leafIndex,
-            result.signedDelegation,
-            signedCommitment,
-            evidence
-        );
+        registry.slashCommitment(proof, result.signedDelegation, signedCommitment, evidence);
 
         // attempt to slash with different SignedCommitment
         signedCommitment = basicCommitment(params.committerSecretKey, params.slasher, "different payload");
         vm.expectRevert(IRegistry.SlashWindowExpired.selector);
-        registry.slashCommitment(
-            result.registrationRoot,
-            result.registrations[leafIndex].signature,
-            proof,
-            leafIndex,
-            result.signedDelegation,
-            signedCommitment,
-            evidence
-        );
+        registry.slashCommitment(proof, result.signedDelegation, signedCommitment, evidence);
 
         uint256 operatorCollateralBefore = operator.balance;
 
@@ -372,9 +302,7 @@ contract SlashCommitmentTester is UnitTestHelper {
             basicCommitment(params.committerSecretKey, params.slasher, "");
 
         // Setup proof
-        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
-        uint256 leafIndex = 0;
-        bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
+        IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(result.registrations, operator, 0);
         bytes memory evidence = "";
 
         // skip past fraud proof window
@@ -390,15 +318,7 @@ contract SlashCommitmentTester is UnitTestHelper {
             address(dummySlasher),
             dummySlasher.SLASH_AMOUNT_WEI()
         );
-        registry.slashCommitment(
-            result.registrationRoot,
-            result.registrations[leafIndex].signature,
-            proof,
-            leafIndex,
-            result.signedDelegation,
-            signedCommitment,
-            evidence
-        );
+        registry.slashCommitment(proof, result.signedDelegation, signedCommitment, evidence);
 
         // slash again with different SignedCommitment
         signedCommitment = basicCommitment(params.committerSecretKey, params.slasher, "different payload");
@@ -411,15 +331,7 @@ contract SlashCommitmentTester is UnitTestHelper {
             address(dummySlasher),
             dummySlasher.SLASH_AMOUNT_WEI()
         );
-        registry.slashCommitment(
-            result.registrationRoot,
-            result.registrations[leafIndex].signature,
-            proof,
-            leafIndex,
-            result.signedDelegation,
-            signedCommitment,
-            evidence
-        );
+        registry.slashCommitment(proof, result.signedDelegation, signedCommitment, evidence);
 
         // verify operator's collateralGwei is decremented by 2 slashings
         assertEq(
@@ -718,9 +630,7 @@ contract SlashEquivocationTester is UnitTestHelper {
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
 
         // Setup proof
-        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
-        uint256 leafIndex = 0;
-        bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
+        IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(result.registrations, operator, 0);
 
         // skip past fraud proof window
         vm.roll(block.timestamp + registry.getConfig().fraudProofWindow + 1);
@@ -739,14 +649,7 @@ contract SlashEquivocationTester is UnitTestHelper {
         // submit both delegations
         uint256 challengerBalanceBefore = challenger.balance;
         vm.startPrank(challenger);
-        registry.slashEquivocation(
-            result.registrationRoot,
-            result.registrations[leafIndex].signature,
-            proof,
-            leafIndex,
-            result.signedDelegation,
-            signedDelegationTwo
-        );
+        registry.slashEquivocation(proof, result.signedDelegation, signedDelegationTwo);
 
         IRegistry.OperatorData memory operatorData = registry.getOperatorData(result.registrationRoot);
 
@@ -779,8 +682,7 @@ contract SlashEquivocationTester is UnitTestHelper {
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
 
-        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
-        bytes32[] memory proof = MerkleTree.generateProof(leaves, 0);
+        IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(result.registrations, operator, 0);
 
         // Create second delegation
         ISlasher.Delegation memory delegationTwo = ISlasher.Delegation({
@@ -795,14 +697,7 @@ contract SlashEquivocationTester is UnitTestHelper {
 
         vm.startPrank(challenger);
         vm.expectRevert(IRegistry.FraudProofWindowNotMet.selector);
-        registry.slashEquivocation(
-            result.registrationRoot,
-            result.registrations[0].signature,
-            proof,
-            0,
-            result.signedDelegation,
-            signedDelegationTwo
-        );
+        registry.slashEquivocation(proof, result.signedDelegation, signedDelegationTwo);
     }
 
     function testRevertEquivocationInvalidProof() public {
@@ -820,9 +715,13 @@ contract SlashEquivocationTester is UnitTestHelper {
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
 
-        // Create invalid proof
-        bytes32[] memory invalidProof = new bytes32[](1);
-        invalidProof[0] = bytes32(0);
+        // Create invalid proof,
+        IRegistry.RegistrationProof memory proof = IRegistry.RegistrationProof({
+            registrationRoot: result.registrationRoot,
+            registration: result.registrations[0],
+            merkleProof: new bytes32[](1),
+            leafIndex: 0
+        });
 
         // Create second delegation
         ISlasher.Delegation memory delegationTwo = ISlasher.Delegation({
@@ -839,14 +738,7 @@ contract SlashEquivocationTester is UnitTestHelper {
 
         vm.startPrank(challenger);
         vm.expectRevert(IRegistry.InvalidProof.selector);
-        registry.slashEquivocation(
-            result.registrationRoot,
-            result.registrations[0].signature,
-            invalidProof,
-            0,
-            result.signedDelegation,
-            signedDelegationTwo
-        );
+        registry.slashEquivocation(proof, result.signedDelegation, signedDelegationTwo);
     }
 
     function testRevertEquivocationDelegationsAreSame() public {
@@ -864,18 +756,14 @@ contract SlashEquivocationTester is UnitTestHelper {
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
 
-        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
-        bytes32[] memory proof = MerkleTree.generateProof(leaves, 0);
+        IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(result.registrations, operator, 0);
 
         vm.roll(block.timestamp + registry.getConfig().fraudProofWindow + 1);
 
         vm.startPrank(challenger);
         vm.expectRevert(IRegistry.DelegationsAreSame.selector);
         registry.slashEquivocation(
-            result.registrationRoot,
-            result.registrations[0].signature,
             proof,
-            0,
             result.signedDelegation,
             result.signedDelegation // Same delegation
         );
@@ -896,8 +784,7 @@ contract SlashEquivocationTester is UnitTestHelper {
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
 
-        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
-        bytes32[] memory proof = MerkleTree.generateProof(leaves, 0);
+        IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(result.registrations, operator, 0);
 
         // Create second delegation with different slot
         ISlasher.Delegation memory delegationTwo = ISlasher.Delegation({
@@ -914,14 +801,7 @@ contract SlashEquivocationTester is UnitTestHelper {
 
         vm.startPrank(challenger);
         vm.expectRevert(IRegistry.DifferentSlots.selector);
-        registry.slashEquivocation(
-            result.registrationRoot,
-            result.registrations[0].signature,
-            proof,
-            0,
-            result.signedDelegation,
-            signedDelegationTwo
-        );
+        registry.slashEquivocation(proof, result.signedDelegation, signedDelegationTwo);
     }
 
     function testRevertEquivocationSlashingAlreadyOccurred() public {
@@ -939,8 +819,7 @@ contract SlashEquivocationTester is UnitTestHelper {
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
 
-        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
-        bytes32[] memory proof = MerkleTree.generateProof(leaves, 0);
+        IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(result.registrations, operator, 0);
 
         // Create second delegation
         ISlasher.Delegation memory delegationTwo = ISlasher.Delegation({
@@ -957,36 +836,15 @@ contract SlashEquivocationTester is UnitTestHelper {
 
         vm.startPrank(challenger);
         // First slash
-        registry.slashEquivocation(
-            result.registrationRoot,
-            result.registrations[0].signature,
-            proof,
-            0,
-            result.signedDelegation,
-            signedDelegationTwo
-        );
+        registry.slashEquivocation(proof, result.signedDelegation, signedDelegationTwo);
 
         // Try to slash again with same delegations
         vm.expectRevert(IRegistry.OperatorAlreadyEquivocated.selector);
-        registry.slashEquivocation(
-            result.registrationRoot,
-            result.registrations[0].signature,
-            proof,
-            0,
-            result.signedDelegation,
-            signedDelegationTwo
-        );
+        registry.slashEquivocation(proof, result.signedDelegation, signedDelegationTwo);
 
         // Try reversing the order of the delegations
         vm.expectRevert(IRegistry.OperatorAlreadyEquivocated.selector);
-        registry.slashEquivocation(
-            result.registrationRoot,
-            result.registrations[0].signature,
-            proof,
-            0,
-            signedDelegationTwo,
-            result.signedDelegation
-        );
+        registry.slashEquivocation(proof, signedDelegationTwo, result.signedDelegation);
     }
 
     function testRevertEquivocationOperatorAlreadyUnregistered() public {
@@ -1004,8 +862,7 @@ contract SlashEquivocationTester is UnitTestHelper {
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
 
-        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
-        bytes32[] memory proof = MerkleTree.generateProof(leaves, 0);
+        IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(result.registrations, operator, 0);
 
         // Create second delegation
         ISlasher.Delegation memory delegationTwo = ISlasher.Delegation({
@@ -1030,14 +887,7 @@ contract SlashEquivocationTester is UnitTestHelper {
 
         vm.startPrank(challenger);
         vm.expectRevert(IRegistry.OperatorAlreadyUnregistered.selector);
-        registry.slashEquivocation(
-            result.registrationRoot,
-            result.registrations[0].signature,
-            proof,
-            0,
-            result.signedDelegation,
-            signedDelegationTwo
-        );
+        registry.slashEquivocation(proof, result.signedDelegation, signedDelegationTwo);
     }
 }
 
@@ -1076,18 +926,15 @@ contract SlashReentrantTester is UnitTestHelper {
 
         (RegisterAndDelegateResult memory result, address reentrantContractAddress) =
             registerAndDelegateReentrant(params);
-        ISlasher.SignedCommitment memory signedCommitment =
-            basicCommitment(params.committerSecretKey, params.slasher, "");
 
         // Setup proof
-        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
-        bytes32[] memory proof = MerkleTree.generateProof(leaves, 0);
+        IRegistry.RegistrationProof memory proof =
+            registry.getRegistrationProof(result.registrations, reentrantContractAddress, 0);
 
         // skip past fraud proof window
         vm.roll(block.timestamp + registry.getConfig().fraudProofWindow + 1);
 
         uint256 challengerBalanceBefore = challenger.balance;
-        uint256 urcBalanceBefore = address(registry).balance;
         uint80 operatorCollateralWeiBefore = registry.getOperatorData(result.registrationRoot).collateralWei;
 
         // Sign a second delegation to equivocate
@@ -1113,14 +960,7 @@ contract SlashReentrantTester is UnitTestHelper {
             address(registry),
             registry.getConfig().minCollateralWei
         );
-        registry.slashEquivocation(
-            result.registrationRoot,
-            result.registrations[0].signature,
-            proof,
-            0,
-            result.signedDelegation,
-            signedDelegationTwo
-        );
+        registry.slashEquivocation(proof, result.signedDelegation, signedDelegationTwo);
 
         IRegistry.OperatorData memory operatorData = registry.getOperatorData(result.registrationRoot);
 
@@ -1196,23 +1036,14 @@ contract SlashConditionTester is UnitTestHelper {
         );
 
         // Setup proof
-        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
-        uint256 leafIndex = 0;
-        bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
+        IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(result.registrations, operator, 0);
 
         // skip past fraud proof window
         vm.roll(block.timestamp + registry.getConfig().fraudProofWindow + 1);
 
         // Slash the operator for equivocation
         vm.startPrank(challenger);
-        registry.slashEquivocation(
-            result.registrationRoot,
-            result.registrations[leafIndex].signature,
-            proof,
-            leafIndex,
-            result.signedDelegation,
-            signedDelegationTwo
-        );
+        registry.slashEquivocation(proof, result.signedDelegation, signedDelegationTwo);
         vm.stopPrank();
 
         // Verify operator was slashed
@@ -1253,9 +1084,7 @@ contract SlashConditionTester is UnitTestHelper {
         );
 
         // Setup proof
-        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
-        uint256 leafIndex = 0;
-        bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
+        IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(result.registrations, operator, 0);
 
         // skip past fraud proof window
         vm.roll(block.timestamp + registry.getConfig().fraudProofWindow + 1);
@@ -1266,14 +1095,7 @@ contract SlashConditionTester is UnitTestHelper {
 
         // Slash the operator for equivocation
         vm.startPrank(challenger);
-        registry.slashEquivocation(
-            result.registrationRoot,
-            result.registrations[leafIndex].signature,
-            proof,
-            leafIndex,
-            result.signedDelegation,
-            signedDelegationTwo
-        );
+        registry.slashEquivocation(proof, result.signedDelegation, signedDelegationTwo);
         vm.stopPrank();
 
         // Verify operator was slashed

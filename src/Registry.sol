@@ -227,27 +227,17 @@ contract Registry is IRegistry {
 
     /// @notice Slash an operator for submitting a fraudulent `SignedRegistration` in the register() function
     /// @dev To save BLS verification gas costs, the URC optimistically accepts registration signatures. This function allows a challenger to slash the operator by executing the BLS verification to prove the registration is fraudulent.
-    /// @dev A successful challenge will transfer `MIN_COLLATERAL / 2` to the challenger, burn `MIN_COLLATERAL / 2`, and then allow the operator to claim their remaining collateral after `SLASH_WINDOW` blocks have elapsed from the `claimSlashedCollateral()` function.
+    /// @dev A successful challenge will transfer `config.minCollateralWei / 2` to the challenger, burn `config.minCollateralWei / 2`, and then allow the operator to claim their remaining collateral after `config.slashWindow` blocks have elapsed from the `claimSlashedCollateral()` function.
     /// @dev The function will revert if:
     /// @dev - The operator has already been deleted (OperatorDeleted)
     /// @dev - The fraud proof window has expired (FraudProofWindowExpired)
-    /// @dev - The operator has not registered (NotRegisteredKey)
-    /// @dev - The proof is invalid (FraudProofChallengeInvalid)
+    /// @dev - The operator has no collateral (NoCollateral)
+    /// @dev - The fraud proof is invalid (FraudProofChallengeInvalid)
     /// @dev - ETH transfer to challenger fails (EthTransferFailed)
-    /// @param registrationRoot The merkle root generated and stored from the register() function
-    /// @param reg The fraudulent SignedRegistration
     /// @param proof The merkle proof to verify the operator's key is in the registry
-    /// @param leafIndex The index of the leaf in the merkle tree
-    /// @return slashedCollateralWei The amount of GWEI slashed
-    function slashRegistration(
-        bytes32 registrationRoot,
-        SignedRegistration calldata reg,
-        bytes32[] calldata proof,
-        uint256 leafIndex
-    ) external returns (uint256 slashedCollateralWei) {
-        Operator storage operator = operators[registrationRoot];
-        address owner = operator.data.owner;
-        uint256 collateralWei = operator.data.collateralWei;
+    /// @return slashedCollateralWei The amount of WEI slashed
+    function slashRegistration(RegistrationProof calldata proof) external returns (uint256 slashedCollateralWei) {
+        Operator storage operator = operators[proof.registrationRoot];
 
         // Prevent reusing a deleted operator
         if (operator.data.deleted) {
@@ -259,20 +249,26 @@ contract Registry is IRegistry {
             revert FraudProofWindowExpired();
         }
 
-        // Verify the registration is part of the registry
-        uint256 verifiedCollateralGwei =
-            _verifyMerkleProof(registrationRoot, keccak256(abi.encode(reg, owner)), proof, leafIndex);
-
-        // 0 collateral implies the registration was not part of the registry
-        if (verifiedCollateralGwei == 0) {
+        // 0 collateral implies the registration was not part of the registry or they were previously slashed to 0
+        if (operator.data.collateralWei == 0) {
             revert NoCollateral();
         }
 
+        // They must have at least the minimum collateral for _rewardAndBurn
+        if (operator.data.collateralWei < config.minCollateralWei) {
+            revert CollateralBelowMinimum();
+        }
+
+        // Verify the registration is part of the registry
+        // It will revert if the registration proof is invalid
+        _verifyMerkleProof(proof);
+
         // Reconstruct registration message
-        bytes memory message = abi.encode(owner);
+        bytes memory message = abi.encode(operator.data.owner);
 
         // Verify registration signature, note the domain separator mixin
-        if (BLS.verify(message, reg.signature, reg.pubkey, REGISTRATION_DOMAIN_SEPARATOR)) {
+        if (BLS.verify(message, proof.registration.signature, proof.registration.pubkey, REGISTRATION_DOMAIN_SEPARATOR))
+        {
             revert FraudProofChallengeInvalid();
         }
 
@@ -288,43 +284,42 @@ contract Registry is IRegistry {
         _rewardAndBurn(config.minCollateralWei / 2, msg.sender);
 
         emit OperatorSlashed(
-            SlashingType.Fraud, registrationRoot, owner, msg.sender, address(this), config.minCollateralWei / 2
+            SlashingType.Fraud,
+            proof.registrationRoot,
+            operator.data.owner,
+            msg.sender,
+            address(this),
+            config.minCollateralWei / 2
         );
 
         return config.minCollateralWei;
     }
 
     /// @notice Slashes an operator for breaking a commitment
-    /// @dev The function verifies `proof` to first ensure the operator's BLS key is in the registry, then verifies the `signedDelegation` was signed by the same key. If the fraud proof window has passed, the URC will call the `slash()` function of the Slasher contract specified in the `signedCommitment`. The Slasher contract will determine if the operator has broken a commitment and return the amount of GWEI to be slashed at the URC.
-    /// @dev The function will burn `slashAmountGwei`. It will also save the timestamp of the slashing to start the `SLASH_WINDOW` in case of multiple slashings.
+    /// @dev The function verifies `proof` to first ensure the operator's BLS key is in the registry, then verifies the `signedDelegation` was signed by the same key. If the fraud proof window has passed, the URC will call the `slash()` function of the Slasher contract specified in the `signedCommitment`. The Slasher contract will determine if the operator has broken a commitment and return the amount of WEI to be slashed at the URC.
+    /// @dev The function will burn `slashAmountWei`. It will also save the timestamp of the slashing to start the `SLASH_WINDOW` in case of multiple slashings.
     /// @dev The function will revert if:
     /// @dev - The operator has already been deleted (OperatorDeleted)
     /// @dev - The same slashing inputs have been supplied before (SlashingAlreadyOccurred)
     /// @dev - The fraud proof window has not passed (FraudProofWindowNotMet)
     /// @dev - The operator has already unregistered (OperatorAlreadyUnregistered)
     /// @dev - The slash window has expired (SlashWindowExpired)
-    /// @dev - The proof is invalid (NotRegisteredKey)
+    /// @dev - The merkle proof is invalid (InvalidProof)
     /// @dev - The signed commitment was not signed by the delegated committer (DelegationSignatureInvalid)
     /// @dev - The slash amount exceeds the operator's collateral (SlashAmountExceedsCollateral)
-    /// @param registrationRoot The merkle root generated and stored from the register() function
-    /// @param registrationSignature The signature from the operator's previously registered `SignedRegistration`
     /// @param proof The merkle proof to verify the operator's key is in the registry
-    /// @param leafIndex The index of the leaf in the merkle tree
     /// @param delegation The SignedDelegation signed by the operator's BLS key
     /// @param commitment The SignedCommitment signed by the delegate's ECDSA key
     /// @param evidence Arbitrary evidence to slash the operator, required by the Slasher contract
     /// @return slashAmountWei The amount of WEI slashed
     function slashCommitment(
-        bytes32 registrationRoot,
-        BLS.G2Point calldata registrationSignature,
-        bytes32[] calldata proof,
-        uint256 leafIndex,
+        RegistrationProof calldata proof,
         ISlasher.SignedDelegation calldata delegation,
         ISlasher.SignedCommitment calldata commitment,
         bytes calldata evidence
     ) external returns (uint256 slashAmountWei) {
-        Operator storage operator = operators[registrationRoot];
-        bytes32 slashingDigest = keccak256(abi.encode(delegation, commitment, registrationRoot));
+        Operator storage operator = operators[proof.registrationRoot];
+        bytes32 slashingDigest = keccak256(abi.encode(delegation, commitment, proof.registrationRoot));
 
         // Prevent reusing a deleted operator
         if (operator.data.deleted) {
@@ -357,9 +352,8 @@ contract Registry is IRegistry {
 
         // Verify the delegation was signed by the operator's BLS key
         // This is a sanity check to ensure the delegation is valid
-        uint256 collateralWei = _verifyDelegation(
-            registrationRoot, registrationSignature, proof, leafIndex, delegation, operator.data.owner
-        );
+        // It will revert if the registration proof is invalid or the Delegation signature is invalid
+        _verifyDelegation(proof, delegation);
 
         // Verify the commitment was signed by the commitment key from the Delegation
         address committer = ECDSA.recover(keccak256(abi.encode(commitment.commitment)), commitment.signature);
@@ -381,7 +375,7 @@ contract Registry is IRegistry {
         );
 
         // Prevent slashing more than the operator's collateral
-        if (slashAmountWei > collateralWei) {
+        if (slashAmountWei > operator.data.collateralWei) {
             revert SlashAmountExceedsCollateral();
         }
 
@@ -393,7 +387,7 @@ contract Registry is IRegistry {
 
         emit OperatorSlashed(
             SlashingType.Commitment,
-            registrationRoot,
+            proof.registrationRoot,
             operator.data.owner,
             msg.sender,
             commitment.commitment.slasher,
@@ -501,22 +495,16 @@ contract Registry is IRegistry {
     /// @dev - Either delegation is invalid (InvalidDelegation)
     /// @dev - The delegations are for different slots (DifferentSlots)
     /// @dev - ETH transfer to challenger fails (EthTransferFailed)
-    /// @param registrationRoot The merkle root generated and stored from the register() function
-    /// @param registrationSignature The signature from the operator's previously registered `SignedRegistration`
     /// @param proof The merkle proof to verify the operator's key is in the registry
-    /// @param leafIndex The index of the leaf in the merkle tree
     /// @param delegationOne The first SignedDelegation signed by the operator's BLS key
     /// @param delegationTwo The second SignedDelegation signed by the operator's BLS key
     /// @return slashAmountWei The amount of WEI slashed
     function slashEquivocation(
-        bytes32 registrationRoot,
-        BLS.G2Point calldata registrationSignature,
-        bytes32[] calldata proof,
-        uint256 leafIndex,
+        RegistrationProof calldata proof,
         ISlasher.SignedDelegation calldata delegationOne,
         ISlasher.SignedDelegation calldata delegationTwo
     ) external returns (uint256 slashAmountWei) {
-        Operator storage operator = operators[registrationRoot];
+        Operator storage operator = operators[proof.registrationRoot];
 
         // Prevent reusing a deleted operator
         if (operator.data.deleted) {
@@ -558,8 +546,9 @@ contract Registry is IRegistry {
         }
 
         // Verify both delegations were signed by the operator's BLS key
-        _verifyDelegation(registrationRoot, registrationSignature, proof, leafIndex, delegationOne, operator.data.owner);
-        _verifyDelegation(registrationRoot, registrationSignature, proof, leafIndex, delegationTwo, operator.data.owner);
+        // It will revert if either the registration proof is invalid or the Delegation signature is invalid
+        _verifyDelegation(proof, delegationOne);
+        _verifyDelegation(proof, delegationTwo);
 
         // Verify the delegations are for the same slot
         if (delegationOne.delegation.slot != delegationTwo.delegation.slot) {
@@ -582,14 +571,14 @@ contract Registry is IRegistry {
 
         emit OperatorSlashed(
             SlashingType.Equivocation,
-            registrationRoot,
+            proof.registrationRoot,
             operator.data.owner,
             msg.sender,
             address(this),
             config.minCollateralWei
         );
 
-        return slashAmountWei;
+        return config.minCollateralWei;
     }
 
     /**
@@ -602,7 +591,7 @@ contract Registry is IRegistry {
     /// @dev The function will revert if:
     /// @dev - The operator was deleted (OperatorDeleted)
     /// @dev - The operator has not registered (NotRegisteredKey)
-    /// @dev - The collateral amount overflows the `collateralGwei` field (CollateralOverflow)
+    /// @dev - The collateral amount overflows the `collateralWei` field (CollateralOverflow)
     /// @param registrationRoot The merkle root generated and stored from the register() function
     function addCollateral(bytes32 registrationRoot) external payable {
         Operator storage operator = operators[registrationRoot];
@@ -780,19 +769,11 @@ contract Registry is IRegistry {
         operatorData = operators[registrationRoot].data;
     }
 
-    /// @notice Verify a merkle proof against a given `registrationRoot`
-    /// @dev The function will return the operator's collateral amount if the proof is valid or 0 if the proof is invalid.
-    /// @param registrationRoot The merkle root generated and stored from the register() function
-    /// @param leaf The leaf to verify
+    /// @notice Verify a merkle proof against a given `RegistrationProof`
+    /// @dev The function will revert if the proof is invalid
     /// @param proof The merkle proof to verify the operator's key is in the registry
-    /// @param leafIndex The index of the leaf in the merkle tree
-    /// @return collateralWei The collateral amount in WEI
-    function verifyMerkleProof(bytes32 registrationRoot, bytes32 leaf, bytes32[] calldata proof, uint256 leafIndex)
-        external
-        view
-        returns (uint256 collateralWei)
-    {
-        collateralWei = _verifyMerkleProof(registrationRoot, leaf, proof, leafIndex);
+    function verifyMerkleProof(RegistrationProof calldata proof) external view {
+        _verifyMerkleProof(proof);
     }
 
     /// @notice Checks if an operator is opted into a protocol
@@ -816,23 +797,15 @@ contract Registry is IRegistry {
         return slasherCommitment.optedOutAt < slasherCommitment.optedInAt && !slasherCommitment.slashed;
     }
 
-    /// @notice Returns the operator data for a given registration root iff the proof is valid
+    /// @notice Returns the operator data for a given `RegistrationProof` iff the proof is valid
     /// @dev The function will revert if the proof is invalid
-    /// @param registrationRoot The merkle root generated and stored from the register() function
-    /// @param reg The registration to verify
     /// @param proof The merkle proof to verify the operator's key is in the registry
-    /// @param leafIndex The index of the leaf in the merkle tree
     /// @return operatorData The operator data
-    function getVerifiedOperatorData(
-        bytes32 registrationRoot,
-        SignedRegistration calldata reg,
-        bytes32[] calldata proof,
-        uint256 leafIndex
-    ) external view returns (OperatorData memory) {
-        OperatorData memory operatorData = operators[registrationRoot].data;
+    function getVerifiedOperatorData(RegistrationProof calldata proof) external view returns (OperatorData memory) {
+        OperatorData memory operatorData = operators[proof.registrationRoot].data;
 
         // Revert if the proof is invalid
-        _verifyMerkleProof(registrationRoot, keccak256(abi.encode(reg, operatorData.owner)), proof, leafIndex);
+        _verifyMerkleProof(proof);
 
         return operatorData;
     }
@@ -845,11 +818,47 @@ contract Registry is IRegistry {
         return slashedBefore[slashingDigest];
     }
 
+    /// @notice Returns a `RegistrationProof` for a given `SignedRegistration` array
+    /// @dev This function is not intended to be called on-chain due to gas costs
+    /// @param regs The array of `SignedRegistration` structs to create a proof for
+    /// @param owner The owner address of the operator
+    /// @param leafIndex The index of the leaf the proof is for
+    /// @return proof The `RegistrationProof` for the given `SignedRegistration` array
+    function getRegistrationProof(SignedRegistration[] calldata regs, address owner, uint256 leafIndex)
+        external
+        pure
+        returns (RegistrationProof memory proof)
+    {
+        proof.registrationRoot = _merkleizeSignedRegistrationsWithOwner(regs, owner);
+        proof.registration = regs[leafIndex];
+        proof.leafIndex = leafIndex;
+
+        bytes32[] memory leaves = _hashToLeaves(regs, owner);
+        proof.merkleProof = MerkleTree.generateProof(leaves, leafIndex);
+    }
+
     /**
      *
      *                                Helper Functions                           *
      *
      */
+
+    /// @notice Hashes an array of `SignedRegistration` structs with the owner address
+    /// @dev Leaves are created by abi-encoding the `SignedRegistration` structs with the owner address, then hashing with keccak256.
+    /// @param regs The array of `SignedRegistration` structs to hash
+    /// @param owner The owner address of the operator
+    /// @return leaves The array of hashed leaves
+    function _hashToLeaves(SignedRegistration[] calldata regs, address owner)
+        internal
+        pure
+        returns (bytes32[] memory leaves)
+    {
+        // Create leaf nodes by hashing SignedRegistration structs
+        leaves = new bytes32[](regs.length);
+        for (uint256 i = 0; i < regs.length; i++) {
+            leaves[i] = keccak256(abi.encode(regs[i], owner));
+        }
+    }
 
     /// @notice Merkleizes an array of `SignedRegistration` structs
     /// @dev Leaves are created by abi-encoding the `SignedRegistration` structs with the owner address, then hashing with keccak256.
@@ -861,68 +870,46 @@ contract Registry is IRegistry {
         returns (bytes32 registrationRoot)
     {
         // Create leaves array with padding
-        bytes32[] memory leaves = new bytes32[](regs.length);
-
-        // Create leaf nodes by hashing SignedRegistration structs
-        for (uint256 i = 0; i < regs.length; i++) {
-            leaves[i] = keccak256(abi.encode(regs[i], owner));
-        }
+        bytes32[] memory leaves = _hashToLeaves(regs, owner);
 
         // Merkleize the leaves
         registrationRoot = MerkleTree.generateTree(leaves);
     }
 
-    /// @notice Verifies a merkle proof against a given `registrationRoot`
-    /// @dev The function will return the operator's collateral amount if the proof is valid or 0 if the proof is invalid.
-    /// @param registrationRoot The merkle root generated and stored from the register() function
-    /// @param leaf The leaf to verify
+    /// @notice Verifies a merkle proof for a given `RegistrationProof`
+    /// @dev The function will revert if the proof is invalid
+    /// @dev The function checks against registered operators to get the owner address
     /// @param proof The merkle proof to verify the operator's key is in the registry
-    /// @param leafIndex The index of the leaf in the merkle tree
-    /// @return collateralWei The collateral amount in WEI
-    function _verifyMerkleProof(bytes32 registrationRoot, bytes32 leaf, bytes32[] calldata proof, uint256 leafIndex)
-        internal
-        view
-        returns (uint256 collateralWei)
-    {
-        if (MerkleTree.verifyProofCalldata(registrationRoot, leaf, leafIndex, proof)) {
-            collateralWei = operators[registrationRoot].data.collateralWei;
-        } else {
+    function _verifyMerkleProof(RegistrationProof calldata proof) internal view {
+        address owner = operators[proof.registrationRoot].data.owner;
+        bytes32 leaf = keccak256(abi.encode(proof.registration, owner));
+        if (!MerkleTree.verifyProofCalldata(proof.registrationRoot, leaf, proof.leafIndex, proof.merkleProof)) {
             revert InvalidProof();
         }
     }
 
-    /// @notice Verifies a delegation was signed by a registered operator's key
-    /// @dev The function will return the operator's collateral amount if the proof is valid or 0 if the proof is invalid.
+    /// @notice Verifies a delegation was signed by an operator's registered BLS key
+    /// @dev The function will return revert if either the registration proof is invalid
+    /// @dev or the Delegation signature is invalid
     /// @dev The `signedDelegation.signature` is expected to be the abi-encoded `Delegation` message mixed with the URC's `DELEGATION_DOMAIN_SEPARATOR`.
-    /// @dev The function will revert if the delegation message expired, if the delegation signature is invalid, or if the delegation is not signed by the operator's BLS key.
-    /// @param registrationRoot The merkle root generated and stored from the register() function
-    /// @param registrationSignature The signature from the operator's previously registered `SignedRegistration`
     /// @param proof The merkle proof to verify the operator's key is in the registry
-    /// @param leafIndex The index of the leaf in the merkle tree
     /// @param delegation The SignedDelegation signed by the operator's BLS key
-    /// @return collateralWei The collateral amount in WEI
-    function _verifyDelegation(
-        bytes32 registrationRoot,
-        BLS.G2Point calldata registrationSignature,
-        bytes32[] calldata proof,
-        uint256 leafIndex,
-        ISlasher.SignedDelegation calldata delegation,
-        address owner
-    ) internal view returns (uint256 collateralWei) {
-        // Reconstruct leaf using pubkey in SignedDelegation to check equivalence
-        SignedRegistration memory reg =
-            SignedRegistration({ pubkey: delegation.delegation.proposer, signature: registrationSignature });
-        bytes32 leaf = keccak256(abi.encode(reg, owner));
-
-        collateralWei = _verifyMerkleProof(registrationRoot, leaf, proof, leafIndex);
-
-        if (collateralWei == 0) {
+    function _verifyDelegation(RegistrationProof calldata proof, ISlasher.SignedDelegation calldata delegation)
+        internal
+        view
+    {
+        // Verify the public key in the proof is the same as the public key in the SignedDelegation
+        if (keccak256(abi.encode(proof.registration.pubkey)) != keccak256(abi.encode(delegation.delegation.proposer))) {
             revert InvalidProof();
         }
+
+        // Verify the registration proof is valid (reverts if invalid)
+        _verifyMerkleProof(proof);
 
         // Reconstruct Delegation message
         bytes memory message = abi.encode(delegation.delegation);
 
+        // Verify it was signed by the registered BLS key
         if (!BLS.verify(message, delegation.signature, delegation.delegation.proposer, DELEGATION_DOMAIN_SEPARATOR)) {
             revert DelegationSignatureInvalid();
         }

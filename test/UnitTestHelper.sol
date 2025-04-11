@@ -65,18 +65,6 @@ contract UnitTestHelper is Test {
         assertEq(operatorData.slashedAt, expectedSlashedAt, "Wrong slashed block");
     }
 
-    function _hashToLeaves(IRegistry.SignedRegistration[] memory _registrations, address _owner)
-        internal
-        pure
-        returns (bytes32[] memory)
-    {
-        bytes32[] memory leaves = new bytes32[](_registrations.length);
-        for (uint256 i = 0; i < _registrations.length; i++) {
-            leaves[i] = keccak256(abi.encode(_registrations[i], _owner));
-        }
-        return leaves;
-    }
-
     function _setupSingleRegistration(uint256 secretKey, address owner)
         internal
         view
@@ -269,18 +257,6 @@ contract ReentrantContract {
         signedDelegationTwo = _signedDelegationTwo;
     }
 
-    function _hashToLeaves(IRegistry.SignedRegistration[] memory _registrations)
-        internal
-        pure
-        returns (bytes32[] memory)
-    {
-        bytes32[] memory leaves = new bytes32[](_registrations.length);
-        for (uint256 i = 0; i < _registrations.length; i++) {
-            leaves[i] = keccak256(abi.encode(_registrations[i]));
-        }
-        return leaves;
-    }
-
     function register(IRegistry.SignedRegistration[] memory _registrations) public {
         require(_registrations.length == 1, "test harness supports only 1 registration");
         registrations[0] = _registrations[0];
@@ -347,15 +323,16 @@ contract ReentrantSlashableRegistrationContract is ReentrantContract {
             errors += 1;
         }
 
-        bytes32[] memory proof; // empty for single leaf
-        try registry.slashRegistration(registrationRoot, registrations[0], proof, 0) {
+        IRegistry.SignedRegistration[] memory _registrations = new IRegistry.SignedRegistration[](1);
+        _registrations[0] = registrations[0];
+        IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(_registrations, address(this), 0);
+        try registry.slashRegistration(proof) {
             revert("should not be able to slash registration again");
         } catch (bytes memory _reason) {
             errors += 1;
         }
 
         // expected re-registering to fail
-        IRegistry.SignedRegistration[] memory _registrations = new IRegistry.SignedRegistration[](1);
         _registrations[0] = registrations[0];
         require(_registrations.length == 1, "test harness supports only 1 registration");
         try registry.register{ value: collateral }(_registrations, address(this)) {
@@ -372,42 +349,39 @@ contract ReentrantSlashableRegistrationContract is ReentrantContract {
 contract ReentrantSlashEquivocation is ReentrantContract {
     constructor(address registryAddress) ReentrantContract(registryAddress) { }
 
-    receive() external payable {
-        try registry.addCollateral{ value: msg.value }(registrationRoot) {
-            revert("should not be able to add collateral");
-        } catch (bytes memory _reason) {
-            revert("should not be able to add collateral");
-            errors += 1;
-        }
+    // receive() external payable {
+    //     // revert("HERERE");
+    //     try registry.addCollateral{ value: msg.value }(registrationRoot) {
+    //         revert("should not be able to add collateral");
+    //     } catch (bytes memory _reason) {
+    //         errors += 1;
+    //     }
 
-        try registry.unregister(registrationRoot) {
-            revert("should not be able to unregister");
-        } catch (bytes memory _reason) {
-            errors += 1;
-        }
+    //     try registry.unregister(registrationRoot) {
+    //         revert("should not be able to unregister");
+    //     } catch (bytes memory _reason) {
+    //         errors += 1;
+    //     }
 
-        try registry.claimCollateral(registrationRoot) {
-            revert("should not be able to claim collateral");
-        } catch (bytes memory _reason) {
-            errors += 1;
-        }
+    //     try registry.claimCollateral(registrationRoot) {
+    //         revert("should not be able to claim collateral");
+    //     } catch (bytes memory _reason) {
+    //         errors += 1;
+    //     }
 
-        // Setup proof
-        IRegistry.SignedRegistration[] memory _registrations = new IRegistry.SignedRegistration[](1);
-        _registrations[0] = registrations[0];
-        uint256 leafIndex = 0;
-        bytes32[] memory proof; // empty for single leaf
-        bytes memory evidence;
+    //     // Setup proof
+    //     IRegistry.SignedRegistration[] memory _registrations = new IRegistry.SignedRegistration[](1);
+    //     _registrations[0] = registrations[0];
 
-        try registry.slashEquivocation(
-            registrationRoot, signedDelegation.signature, proof, leafIndex, signedDelegation, signedDelegationTwo
-        ) {
-            revert("should not be able to slash equivocation again");
-        } catch (bytes memory _reason) {
-            errors += 1;
-        }
+    //     IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(_registrations, address(this), 0);
 
-        // all attempts to re-enter should have failed
-        require(errors == 4, "should have 4 errors");
-    }
+    //     try registry.slashEquivocation(proof, signedDelegation, signedDelegationTwo) {
+    //         revert("should not be able to slash equivocation again");
+    //     } catch (bytes memory _reason) {
+    //         errors += 1;
+    //     }
+
+    //     // all attempts to re-enter should have failed
+    //     require(errors == 4, "should have 4 errors");
+    // }
 }

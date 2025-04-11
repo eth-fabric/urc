@@ -196,26 +196,16 @@ contract StateLockSlasherTest is UnitTestHelper, PreconfStructs {
 
         IRegistry.OperatorData memory operatorData = registry.getOperatorData(result.registrationRoot);
 
-        // Merkle proof for URC registration
-        bytes32[] memory leaves = _hashToLeaves(result.registrations, operatorData.owner);
-        uint256 leafIndex = 0;
-        bytes32[] memory registrationProof = MerkleTree.generateProof(leaves, leafIndex);
-
         // Save for comparison after slashing
         uint256 challengerBalanceBefore = challenger.balance;
         uint256 urcBalanceBefore = address(registry).balance;
 
+        IRegistry.RegistrationProof memory proof =
+            registry.getRegistrationProof(result.registrations, operatorData.owner, 0);
+
         // Slash via URC
         vm.startPrank(challenger);
-        registry.slashCommitment(
-            result.registrationRoot,
-            result.registrations[0].signature,
-            registrationProof,
-            leafIndex,
-            result.signedDelegation,
-            signedCommitment,
-            evidence
-        );
+        registry.slashCommitment(proof, result.signedDelegation, signedCommitment, evidence);
 
         _verifySlashCommitmentBalances(challenger, slashAmountWei, 0, challengerBalanceBefore, urcBalanceBefore);
 

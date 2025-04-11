@@ -62,17 +62,10 @@ contract RegisterTester is UnitTestHelper {
 
         _assertRegistration(registrationRoot, operator, uint80(collateral), uint48(block.number), type(uint48).max, 0);
 
-        // generate merkle proof
-        bytes32[] memory leaves = _hashToLeaves(registrations, operator);
-        bytes32[] memory proof = MerkleTree.generateProof(leaves, 0);
+        IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(registrations, operator, 0);
 
-        uint256 gotCollateral = registry.verifyMerkleProof(
-            registrationRoot,
-            leaves[0],
-            proof,
-            0 // leafIndex
-        );
-        assertEq(gotCollateral, uint80(collateral), "Wrong collateral amount");
+        // reverts if proof is invalid
+        registry.verifyMerkleProof(proof);
     }
 
     function test_verifyMerkleProofHeight2() public {
@@ -88,19 +81,13 @@ contract RegisterTester is UnitTestHelper {
 
         _assertRegistration(registrationRoot, operator, uint80(collateral), uint48(block.number), type(uint48).max, 0);
 
-        bytes32[] memory leaves = _hashToLeaves(registrations, operator);
+        // Test first proof path - leafIndex = 0
+        IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(registrations, operator, 0);
+        registry.verifyMerkleProof(proof);
 
-        // Test first proof path
-        uint256 leafIndex = 0;
-        bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
-        uint256 gotCollateral = registry.verifyMerkleProof(registrationRoot, leaves[0], proof, leafIndex);
-        assertEq(gotCollateral, uint80(collateral), "Wrong collateral amount");
-
-        // Test second proof path
-        leafIndex = 1;
-        proof = MerkleTree.generateProof(leaves, leafIndex);
-        gotCollateral = registry.verifyMerkleProof(registrationRoot, leaves[1], proof, leafIndex);
-        assertEq(gotCollateral, uint80(collateral), "Wrong collateral amount");
+        // Test second proof path - leafIndex = 1
+        proof = registry.getRegistrationProof(registrations, operator, 1);
+        registry.verifyMerkleProof(proof);
     }
 
     function test_verifyMerkleProofHeight3() public {
@@ -118,35 +105,29 @@ contract RegisterTester is UnitTestHelper {
 
         _assertRegistration(registrationRoot, operator, uint80(collateral), uint48(block.number), type(uint48).max, 0);
 
-        bytes32[] memory leaves = _hashToLeaves(registrations, operator);
-
         // Test all proof paths
-        for (uint256 i = 0; i < leaves.length; i++) {
-            bytes32[] memory proof = MerkleTree.generateProof(leaves, i);
-            uint256 gotCollateral = registry.verifyMerkleProof(registrationRoot, leaves[i], proof, i);
-            assertEq(gotCollateral, uint80(collateral), "Wrong collateral amount");
+        for (uint256 i = 0; i < registrations.length; i++) {
+            IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(registrations, operator, i);
+            registry.verifyMerkleProof(proof);
         }
     }
 
     function test_fuzzRegister(uint8 n) public {
         vm.assume(n > 0);
         uint256 size = uint256(n);
-        uint256 collateral = size * registry.getConfig().minCollateralWei;
 
         IRegistry.SignedRegistration[] memory registrations = new IRegistry.SignedRegistration[](size);
         for (uint256 i = 0; i < size; i++) {
             registrations[i] = _createSignedRegistration(SECRET_KEY_1 + i, operator);
         }
 
-        bytes32 registrationRoot = registry.register{ value: collateral }(registrations, operator);
-
-        bytes32[] memory leaves = _hashToLeaves(registrations, operator);
+        // Register the keys
+        registry.register{ value: registry.getConfig().minCollateralWei }(registrations, operator);
 
         // Test all proof paths
-        for (uint256 i = 0; i < leaves.length; i++) {
-            bytes32[] memory proof = MerkleTree.generateProof(leaves, i);
-            uint256 gotCollateral = registry.verifyMerkleProof(registrationRoot, leaves[i], proof, i);
-            assertEq(gotCollateral, uint80(collateral), "Wrong collateral amount");
+        for (uint256 i = 0; i < registrations.length; i++) {
+            IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(registrations, operator, i);
+            registry.verifyMerkleProof(proof);
         }
     }
 }
@@ -499,21 +480,12 @@ contract SlashRegistrationTester is UnitTestHelper {
 
         _assertRegistration(registrationRoot, operator, uint80(collateral), uint48(block.number), type(uint48).max, 0);
 
-        // generate merkle proof
-        bytes32[] memory leaves = _hashToLeaves(registrations, operator);
-        bytes32[] memory proof = MerkleTree.generateProof(leaves, 0);
-
         uint256 operatorBalanceBefore = operator.balance;
         uint256 challengerBalanceBefore = challenger.balance;
         uint256 urcBalanceBefore = address(registry).balance;
 
         vm.startPrank(challenger);
-        registry.slashRegistration(
-            registrationRoot,
-            registrations[0],
-            proof,
-            0 // leafIndex
-        );
+        registry.slashRegistration(registry.getRegistrationProof(registrations, operator, 0));
 
         vm.roll(block.number + registry.getConfig().slashWindow);
         vm.startPrank(operator);
@@ -555,21 +527,15 @@ contract SlashRegistrationTester is UnitTestHelper {
             0
         );
 
-        // generate merkle proof
-        bytes32[] memory leaves = _hashToLeaves(registrations, operator);
-        bytes32[] memory proof = MerkleTree.generateProof(leaves, 0);
-
         uint256 thiefBalanceBefore = thief.balance;
         uint256 challengerBalanceBefore = challenger.balance;
         uint256 urcBalanceBefore = address(registry).balance;
 
+        // Note that proof is created using the thief's address as the owner
+        IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(registrations, thief, 0);
+
         vm.startPrank(challenger);
-        registry.slashRegistration(
-            registrationRoot,
-            registrations[0],
-            proof,
-            0 // leafIndex
-        );
+        registry.slashRegistration(proof);
 
         vm.roll(block.number + registry.getConfig().slashWindow);
         vm.startPrank(thief);
@@ -606,22 +572,15 @@ contract SlashRegistrationTester is UnitTestHelper {
         // Verify initial registration state
         _assertRegistration(registrationRoot, thief, uint80(collateral), uint48(block.number), type(uint48).max, 0);
 
-        // Create proof for operator's registration
-        bytes32[] memory leaves = _hashToLeaves(registrations, thief);
-        uint256 leafIndex = 0;
-        bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
-
         uint256 thiefBalanceBefore = thief.balance;
         uint256 challengerBalanceBefore = challenger.balance;
         uint256 urcBalanceBefore = address(registry).balance;
 
+        // Note that proof is created using the thief's address as the owner
+        IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(registrations, thief, 0);
+
         vm.startPrank(challenger);
-        registry.slashRegistration(
-            registrationRoot,
-            registrations[0],
-            proof,
-            0 // leafIndex
-        );
+        registry.slashRegistration(proof);
 
         vm.roll(block.number + registry.getConfig().slashWindow);
         vm.startPrank(thief);
@@ -655,16 +614,15 @@ contract SlashRegistrationTester is UnitTestHelper {
             thief // submit different withdrawal address than the one signed by validator keys
         );
 
-        bytes32[] memory leaves = _hashToLeaves(registrations, thief);
-
         uint256 thiefBalanceBefore = thief.balance;
         uint256 challengerBalanceBefore = challenger.balance;
         uint256 urcBalanceBefore = address(registry).balance;
 
-        bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
+        // Note that proof is created using the thief's address as the owner
+        IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(registrations, thief, leafIndex);
 
         vm.startPrank(challenger);
-        registry.slashRegistration(registrationRoot, registrations[leafIndex], proof, leafIndex);
+        registry.slashRegistration(proof);
 
         vm.roll(block.number + registry.getConfig().slashWindow);
         vm.startPrank(thief);
@@ -761,17 +719,11 @@ contract RentrancyTester is UnitTestHelper {
             0
         );
 
-        // generate merkle proof
-        bytes32[] memory leaves = _hashToLeaves(registrations, operator);
-        bytes32[] memory proof = MerkleTree.generateProof(leaves, 0);
+        IRegistry.RegistrationProof memory proof =
+            registry.getRegistrationProof(registrations, address(reentrantContract), 0);
 
         // operator can slash the registration
         vm.startPrank(operator);
-        registry.slashRegistration(
-            reentrantContract.registrationRoot(),
-            registrations[0],
-            proof,
-            0 // leafIndex
-        );
+        registry.slashRegistration(proof);
     }
 }

@@ -230,23 +230,11 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
         vm.warp(block.timestamp + slasher.CHALLENGE_WINDOW() + 1);
 
         // Merkle proof for URC registration
-        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
-        bytes32[] memory registrationProof = MerkleTree.generateProof(
-            leaves,
-            0 // leaf index
-        );
+        IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(result.registrations, operator, 0);
 
         // Slash via URC
         vm.prank(challenger);
-        registry.slashCommitment(
-            result.registrationRoot,
-            result.registrations[0].signature,
-            registrationProof,
-            0, // leaf index
-            result.signedDelegation,
-            signedCommitment,
-            abi.encode(inclusionProof)
-        );
+        registry.slashCommitment(proof, result.signedDelegation, signedCommitment, abi.encode(inclusionProof));
 
         _verifySlashCommitmentBalances(challenger, slashAmountWei, 0, challengerBalanceBefore, urcBalanceBefore);
 
@@ -281,22 +269,12 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
         vm.warp(block.timestamp + slasher.CHALLENGE_WINDOW() + 1);
 
         // Merkle proof for URC registration
-        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
-        uint256 leafIndex = 0;
-        bytes32[] memory registrationProof = MerkleTree.generateProof(leaves, leafIndex);
+        IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(result.registrations, operator, 0);
 
         // Try to slash as different address (not the original challenger)
         vm.prank(operator);
         vm.expectRevert(PreconfStructs.WrongChallengerAddress.selector);
-        registry.slashCommitment(
-            result.registrationRoot,
-            result.registrations[0].signature,
-            registrationProof,
-            leafIndex,
-            result.signedDelegation,
-            signedCommitment,
-            abi.encode(inclusionProof)
-        );
+        registry.slashCommitment(proof, result.signedDelegation, signedCommitment, abi.encode(inclusionProof));
     }
 
     function test_revert_slash_notURC() public {

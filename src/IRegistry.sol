@@ -90,6 +90,17 @@ interface IRegistry {
         Commitment
     }
 
+    struct RegistrationProof {
+        /// The merkle root of the registration merkle tree
+        bytes32 registrationRoot;
+        /// The registration to verify
+        SignedRegistration registration;
+        /// The merkle proof to verify the operator's key is in the registry
+        bytes32[] merkleProof;
+        /// The index of the leaf in the merkle tree
+        uint256 leafIndex;
+    }
+
     /**
      *
      *                                *
@@ -186,6 +197,8 @@ interface IRegistry {
     error OptInDelayNotMet();
     error InvalidProof();
     error NoCollateral();
+    error CollateralBelowMinimum();
+
     /**
      *
      *                                *
@@ -193,7 +206,6 @@ interface IRegistry {
      *                                *
      *
      */
-
     function register(SignedRegistration[] calldata registrations, address owner)
         external
         payable
@@ -205,18 +217,10 @@ interface IRegistry {
 
     function optOutOfSlasher(bytes32 registrationRoot, address slasher) external;
 
-    function slashRegistration(
-        bytes32 registrationRoot,
-        SignedRegistration calldata reg,
-        bytes32[] calldata proof,
-        uint256 leafIndex
-    ) external returns (uint256 collateralWei);
+    function slashRegistration(RegistrationProof calldata proof) external returns (uint256 collateralWei);
 
     function slashCommitment(
-        bytes32 registrationRoot,
-        BLS.G2Point calldata registrationSignature,
-        bytes32[] calldata proof,
-        uint256 leafIndex,
+        RegistrationProof calldata proof,
         ISlasher.SignedDelegation calldata delegation,
         ISlasher.SignedCommitment calldata commitment,
         bytes calldata evidence
@@ -229,10 +233,7 @@ interface IRegistry {
     ) external returns (uint256 slashAmountWei);
 
     function slashEquivocation(
-        bytes32 registrationRoot,
-        BLS.G2Point calldata registrationSignature,
-        bytes32[] calldata proof,
-        uint256 leafIndex,
+        RegistrationProof calldata proof,
         ISlasher.SignedDelegation calldata delegationOne,
         ISlasher.SignedDelegation calldata delegationTwo
     ) external returns (uint256 slashAmountWei);
@@ -243,10 +244,9 @@ interface IRegistry {
 
     function claimSlashedCollateral(bytes32 registrationRoot) external;
 
-    function verifyMerkleProof(bytes32 registrationRoot, bytes32 leaf, bytes32[] calldata proof, uint256 leafIndex)
-        external
-        view
-        returns (uint256 collateralWei);
+    // =========== getter functions ===========
+
+    function verifyMerkleProof(RegistrationProof calldata proof) external view;
 
     function getSlasherCommitment(bytes32 registrationRoot, address slasher)
         external
@@ -255,12 +255,7 @@ interface IRegistry {
 
     function isOptedIntoSlasher(bytes32 registrationRoot, address slasher) external view returns (bool);
 
-    function getVerifiedOperatorData(
-        bytes32 registrationRoot,
-        SignedRegistration calldata reg,
-        bytes32[] calldata proof,
-        uint256 leafIndex
-    ) external view returns (OperatorData memory);
+    function getVerifiedOperatorData(RegistrationProof calldata proof) external view returns (OperatorData memory);
 
     function getHistoricalCollateral(bytes32 registrationRoot, uint256 timestamp)
         external
@@ -272,4 +267,9 @@ interface IRegistry {
     function getOperatorData(bytes32 registrationRoot) external view returns (OperatorData memory operatorData);
 
     function slashingEvidenceAlreadyUsed(bytes32 slashingDigest) external view returns (bool);
+
+    function getRegistrationProof(SignedRegistration[] calldata regs, address owner, uint256 leafIndex)
+        external
+        pure
+        returns (RegistrationProof memory proof);
 }
