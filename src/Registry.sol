@@ -196,6 +196,35 @@ contract Registry is IRegistry {
      *                                Slashing Functions                           *
      *
      */
+    modifier isSlashableCommitment(bytes32 registrationRoot) {
+        OperatorData memory operator = operators[registrationRoot].data;
+
+        // Prevent reusing a deleted operator
+        if (operator.deleted) {
+            revert OperatorDeleted();
+        }
+
+        // Operator is not liable for slashings before the fraud proof window elapses
+        if (block.number < operator.registeredAt + config.fraudProofWindow) {
+            revert FraudProofWindowNotMet();
+        }
+
+        // Operator is not liable for slashings after unregister and the delay has passed
+        if (
+            operator.unregisteredAt != type(uint48).max
+                && block.number > operator.unregisteredAt + config.unregistrationDelay
+        ) {
+            revert OperatorAlreadyUnregistered();
+        }
+
+        // Slashing can only occur within the slash window after the first reported slashing
+        // After the slash window has passed, the operator can claim collateral
+        if (operator.slashedAt != 0 && block.number > operator.slashedAt + config.slashWindow) {
+            revert SlashWindowExpired();
+        }
+
+        _;
+    }
 
     /// @inheritdoc IRegistry
     function slashRegistration(RegistrationProof calldata proof) external returns (uint256 slashedCollateralWei) {
@@ -263,39 +292,15 @@ contract Registry is IRegistry {
         ISlasher.SignedDelegation calldata delegation,
         ISlasher.SignedCommitment calldata commitment,
         bytes calldata evidence
-    ) external returns (uint256 slashAmountWei) {
+    ) external isSlashableCommitment(proof.registrationRoot) returns (uint256 slashAmountWei) {
         Operator storage operator = operators[proof.registrationRoot];
 
         // Calculate a unique identifier for the slashing evidence
         bytes32 slashingDigest = keccak256(abi.encode(delegation, commitment, proof.registrationRoot));
 
-        // Prevent reusing a deleted operator
-        if (operator.data.deleted) {
-            revert OperatorDeleted();
-        }
-
         // Prevent slashing with same inputs
         if (slashedBefore[slashingDigest]) {
             revert SlashingAlreadyOccurred();
-        }
-
-        // Operator is not liable for slashings before the fraud proof window elapses
-        if (block.number < operator.data.registeredAt + config.fraudProofWindow) {
-            revert FraudProofWindowNotMet();
-        }
-
-        // Operator is not liable for slashings after unregistering and the delay has passed
-        if (
-            operator.data.unregisteredAt != type(uint48).max
-                && block.number > operator.data.unregisteredAt + config.unregistrationDelay
-        ) {
-            revert OperatorAlreadyUnregistered();
-        }
-
-        // Slashing can only occur within the slash window after the first reported slashing
-        // After the slash window has passed, the operator can claim collateral
-        if (operator.data.slashedAt != 0 && block.number > operator.data.slashedAt + config.slashWindow) {
-            revert SlashWindowExpired();
         }
 
         // Verify the delegation was signed by the operator's BLS key
@@ -309,11 +314,6 @@ contract Registry is IRegistry {
             revert UnauthorizedCommitment();
         }
 
-        // Save timestamp only once to start the slash window
-        if (operator.data.slashedAt == 0) {
-            operator.data.slashedAt = uint48(block.number);
-        }
-
         // Prevent same slashing from occurring again
         slashedBefore[slashingDigest] = true;
 
@@ -322,58 +322,17 @@ contract Registry is IRegistry {
             delegation.delegation, commitment.commitment, evidence, msg.sender
         );
 
-        // Prevent slashing more than the operator's collateral
-        if (slashAmountWei > operator.data.collateralWei) {
-            revert SlashAmountExceedsCollateral();
-        }
-
-        // Decrement operator's collateral
-        operator.data.collateralWei -= uint80(slashAmountWei);
-
-        // Burn the slashed amount
-        _burnETH(slashAmountWei);
-
-        emit OperatorSlashed(
-            SlashingType.Commitment,
-            proof.registrationRoot,
-            operator.data.owner,
-            msg.sender,
-            commitment.commitment.slasher,
-            slashAmountWei
-        );
+        // Handle the slashing accounting
+        _slashCommitment(proof.registrationRoot, slashAmountWei, commitment.commitment.slasher);
     }
 
     /// @inheritdoc IRegistry
-    function slashCommitmentFromOptIn(
+    function slashCommitment(
         bytes32 registrationRoot,
         ISlasher.SignedCommitment calldata commitment,
         bytes calldata evidence
-    ) external returns (uint256 slashAmountWei) {
+    ) external isSlashableCommitment(registrationRoot) returns (uint256 slashAmountWei) {
         Operator storage operator = operators[registrationRoot];
-
-        // Prevent reusing a deleted operator
-        if (operator.data.deleted) {
-            revert OperatorDeleted();
-        }
-
-        // Operator is not liable for slashings before the fraud proof window elapses
-        if (block.number < operator.data.registeredAt + config.fraudProofWindow) {
-            revert FraudProofWindowNotMet();
-        }
-
-        // Operator is not liable for slashings after unregister and the delay has passed
-        if (
-            operator.data.unregisteredAt != type(uint48).max
-                && block.number > operator.data.unregisteredAt + config.unregistrationDelay
-        ) {
-            revert OperatorAlreadyUnregistered();
-        }
-
-        // Slashing can only occur within the slash window after the first reported slashing
-        // After the slash window has passed, the operator can claim collateral
-        if (operator.data.slashedAt != 0 && block.number > operator.data.slashedAt + config.slashWindow) {
-            revert SlashWindowExpired();
-        }
 
         // Recover the SlasherCommitment entry
         SlasherCommitment storage slasherCommitment = operator.slasherCommitments[commitment.commitment.slasher];
@@ -389,7 +348,7 @@ contract Registry is IRegistry {
             revert UnauthorizedCommitment();
         }
 
-        // Save timestamp only once to start the slash window - MOVED BEFORE EXTERNAL CALL
+        // Save timestamp only once to start the slash window
         if (operator.data.slashedAt == 0) {
             operator.data.slashedAt = uint48(block.number);
         }
@@ -401,25 +360,8 @@ contract Registry is IRegistry {
         slashAmountWei =
             ISlasher(commitment.commitment.slasher).slashFromOptIn(commitment.commitment, evidence, msg.sender);
 
-        // Prevent slashing more than the operator's collateral
-        if (slashAmountWei > operator.data.collateralWei) {
-            revert SlashAmountExceedsCollateral();
-        }
-
-        // Decrement operator's collateral
-        operator.data.collateralWei -= uint80(slashAmountWei);
-
-        // Burn the slashed amount
-        _burnETH(slashAmountWei);
-
-        emit OperatorSlashed(
-            SlashingType.Commitment,
-            registrationRoot,
-            operator.data.owner,
-            msg.sender,
-            commitment.commitment.slasher,
-            slashAmountWei
-        );
+        // Handle the slashing accounting
+        _slashCommitment(registrationRoot, slashAmountWei, commitment.commitment.slasher);
     }
 
     /// @inheritdoc IRegistry
@@ -733,6 +675,37 @@ contract Registry is IRegistry {
      *                                Helper Functions                           *
      *
      */
+
+    /// @notice Handles the slashing accounting for a commitment
+    /// @dev The function will revert if:
+    /// @dev - The slash amount exceeds the operator's collateral (SlashAmountExceedsCollateral)
+    /// @dev - ETH transfer to burner address fails (EthTransferFailed)
+    /// @param registrationRoot The registration root of the operator
+    /// @param slashAmountWei The amount of collateral to slash
+    /// @param slasher The address of the slasher
+    function _slashCommitment(bytes32 registrationRoot, uint256 slashAmountWei, address slasher) internal {
+        Operator storage operator = operators[registrationRoot];
+
+        // Save timestamp only once to start the slash window
+        if (operator.data.slashedAt == 0) {
+            operator.data.slashedAt = uint48(block.number);
+        }
+
+        // Prevent slashing more than the operator's collateral
+        if (slashAmountWei > operator.data.collateralWei) {
+            revert SlashAmountExceedsCollateral();
+        }
+
+        // Decrement operator's collateral
+        operator.data.collateralWei -= uint80(slashAmountWei);
+
+        // Burn the slashed amount
+        _burnETH(slashAmountWei);
+
+        emit OperatorSlashed(
+            SlashingType.Commitment, registrationRoot, operator.data.owner, msg.sender, slasher, slashAmountWei
+        );
+    }
 
     /// @notice Hashes an array of `SignedRegistration` structs with the owner address
     /// @dev Leaves are created by abi-encoding the `SignedRegistration` structs with the owner address, then hashing with keccak256.

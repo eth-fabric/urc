@@ -222,7 +222,6 @@ interface IRegistry {
         payable
         returns (bytes32 registrationRoot);
 
-
     /// @notice Starts the process to unregister an operator from the URC
     /// @dev The function will mark the `unregisteredAt` timestamp in the Operator struct. The operator can claim their collateral after the `unregistrationDelay` more blocks have passed.
     /// @dev The function will revert if:
@@ -310,7 +309,7 @@ interface IRegistry {
     /// @param commitment The SignedCommitment signed by the delegate's ECDSA key
     /// @param evidence Arbitrary evidence to slash the operator, required by the Slasher contract
     /// @return slashAmountWei The amount of WEI slashed
-    function slashCommitmentFromOptIn(
+    function slashCommitment(
         bytes32 registrationRoot,
         ISlasher.SignedCommitment calldata commitment,
         bytes calldata evidence
@@ -392,24 +391,17 @@ interface IRegistry {
         external
         view
         returns (SlasherCommitment memory);
-    
+
     /// @notice Returns true if the operator has been slashed
     /// @param registrationRoot The merkle root generated and stored from the register() function
     /// @return slashed True if the operator has been slashed, false otherwise
-    function isSlashed(bytes32 registrationRoot)
-        external
-        view
-        returns (bool slashed);
-    
- 
+    function isSlashed(bytes32 registrationRoot) external view returns (bool slashed);
+
     /// @notice Returns true if the operator has been slashed for a given slasher
     /// @param registrationRoot The merkle root generated and stored from the register() function
     /// @param slasher The address of the slasher to check
     /// @return slashed True if the operator has been slashed, false otherwise
-    function isSlashed(bytes32 registrationRoot, address slasher)
-        external
-        view
-        returns (bool slashed);
+    function isSlashed(bytes32 registrationRoot, address slasher) external view returns (bool slashed);
 
     /// @notice Checks if an operator is opted into a protocol and hasn't been slashed
     /// @param registrationRoot The merkle root generated and stored from the register() function
