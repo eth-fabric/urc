@@ -81,6 +81,26 @@ contract BLSTest is Test {
                 && publicKey.y.b == expected.y.b
         );
     }
+
+    function testG1PointCompress_1() public {
+        BLS.G1Point memory point = BLS.toPublicKey(123456);
+        BLS.Fp memory result = BLS.compress(point);
+
+        // Expected result: 0xaf6e96c0eccd8d4ae868be9299af737855a1b08d57bccb565ea7e69311a30baeebe08d493c3fea97077e8337e95ac5a6
+        assert(result.a == 233189109563333818632959426218981028728);
+        assert(result.b == 38732273024956312936195524807674957651409788979825024437260187772136397129126);
+    }
+
+    function testG1PointCompress_2() public {
+        BLS.G1Point memory point = BLS.toPublicKey(69420);
+        BLS.Fp memory result = BLS.compress(point);
+        console.log("result.a", result.a);
+        console.log("result.b", result.b);
+
+        // Expected result: 0xb9e16ee4c0c0f6fd65b48c8dc759038bd2eebd979e489d08d69825bed32a37c3cc69e9e05f577445ee27319791832961
+        assert(result.a == 247077695202111629659213208963742499723);
+        assert(result.b == 95407516321583900695556749922087294361570042875752728076201341488189472450913);
+    }
 }
 
 contract BLSGasTest is Test {
@@ -183,5 +203,11 @@ contract BLSGasTest is Test {
         g2Points[1] = messagePoint;
 
         BLS.Pairing(g1Points, g2Points);
+    }
+
+    function testG1PointCompressGas() public {
+        BLS.G1Point memory point = BLS.toPublicKey(123456);
+        vm.resetGasMetering();
+        BLS.compress(point);
     }
 }
