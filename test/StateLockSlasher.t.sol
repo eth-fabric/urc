@@ -31,15 +31,15 @@ contract StateLockSlasherTest is UnitTestHelper, PreconfStructs {
 
     StateLockSlasher slasher;
     BLS.G1Point delegatePubKey;
-    uint256 slashAmountGwei = 1 ether / 1 gwei; // slash 1 ether
+    uint256 slashAmountWei = 1 ether;
     uint256 collateral = 1.1 ether;
     uint256 committerSecretKey;
     address committer;
 
     function setUp() public {
         vm.createSelectFork(vm.rpcUrl("mainnet"));
-        slasher = new StateLockSlasher(slashAmountGwei);
-        registry = new Registry();
+        slasher = new StateLockSlasher(slashAmountWei);
+        registry = new Registry(defaultConfig());
         (committer, committerSecretKey) = makeAddrAndKey("commitmentsKey");
         delegatePubKey = BLS.toPublicKey(SECRET_KEY_2);
         vm.deal(committer, 100 ether);
@@ -141,8 +141,8 @@ contract StateLockSlasherTest is UnitTestHelper, PreconfStructs {
         vm.deal(alice, 100 ether); // Give alice some ETH
 
         // Advance before the fraud proof window
-        vm.roll(exclusionBlockNumber - registry.FRAUD_PROOF_WINDOW());
-        vm.warp(exclusionBlockNumber - registry.FRAUD_PROOF_WINDOW() * 12);
+        vm.roll(exclusionBlockNumber - registry.getConfig().fraudProofWindow);
+        vm.warp(exclusionBlockNumber - registry.getConfig().fraudProofWindow * 12);
 
         // Register and delegate
         result = setupRegistration(alice, delegate, 9994114 - 100);
@@ -194,44 +194,34 @@ contract StateLockSlasherTest is UnitTestHelper, PreconfStructs {
             bytes memory evidence
         ) = setupSlash(1);
 
-        // Merkle proof for URC registration
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
-        uint256 leafIndex = 0;
-        bytes32[] memory registrationProof = MerkleTree.generateProof(leaves, leafIndex);
+        IRegistry.OperatorData memory operatorData = registry.getOperatorData(result.registrationRoot);
 
         // Save for comparison after slashing
         uint256 challengerBalanceBefore = challenger.balance;
         uint256 urcBalanceBefore = address(registry).balance;
 
+        IRegistry.RegistrationProof memory proof =
+            registry.getRegistrationProof(result.registrations, operatorData.owner, 0);
+
         // Slash via URC
         vm.startPrank(challenger);
-        registry.slashCommitment(
-            result.registrationRoot,
-            result.registrations[0].signature,
-            registrationProof,
-            leafIndex,
-            result.signedDelegation,
-            signedCommitment,
-            evidence
-        );
+        registry.slashCommitment(proof, result.signedDelegation, signedCommitment, evidence);
 
-        _verifySlashCommitmentBalances(
-            challenger, slashAmountGwei * 1 gwei, 0, challengerBalanceBefore, urcBalanceBefore
-        );
+        _verifySlashCommitmentBalances(challenger, slashAmountWei, 0, challengerBalanceBefore, urcBalanceBefore);
 
         // Retrieve operator data
-        OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
+        operatorData = registry.getOperatorData(result.registrationRoot);
 
         // Verify operator's slashedAt is set
         assertEq(operatorData.slashedAt, block.number, "slashedAt not set");
 
         // Verify operator's collateralGwei is decremented
-        assertEq(operatorData.collateralGwei, collateral / 1 gwei - slashAmountGwei, "collateralGwei not decremented");
+        assertEq(operatorData.collateralWei, collateral - slashAmountWei, "collateralGwei not decremented");
 
         // Verify the slashedBefore mapping is set
         bytes32 slashingDigest =
             keccak256(abi.encode(result.signedDelegation, signedCommitment, result.registrationRoot));
-        assertEq(registry.slashedBefore(slashingDigest), true, "slashedBefore not set");
+        assertEq(registry.slashingEvidenceAlreadyUsed(slashingDigest), true, "slashedBefore not set");
     }
 
     // =========== Helper functions ===========

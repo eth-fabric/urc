@@ -22,7 +22,7 @@ contract StateLockSlasher is ISlasher, PreconfStructs {
     using TransactionDecoder for TransactionDecoder.Transaction;
     using EnumerableSet for EnumerableSet.Bytes32Set;
 
-    uint256 public SLASH_AMOUNT_GWEI;
+    uint256 public SLASH_AMOUNT_WEI;
     address public constant BEACON_ROOTS_CONTRACT =
         0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02;
     uint256 public constant EIP4788_WINDOW = 8191;
@@ -31,8 +31,8 @@ contract StateLockSlasher is ISlasher, PreconfStructs {
     uint256 public constant SLOT_TIME = 12;
     uint256 public ETH2_GENESIS_TIMESTAMP;
 
-    constructor(uint256 _slashAmountGwei) {
-        SLASH_AMOUNT_GWEI = _slashAmountGwei;
+    constructor(uint256 _slashAmountWei) {
+        SLASH_AMOUNT_WEI = _slashAmountWei;
 
         if (block.chainid == 17000) {
             // Holesky
@@ -51,7 +51,7 @@ contract StateLockSlasher is ISlasher, PreconfStructs {
         ISlasher.Commitment calldata commitment,
         bytes calldata evidence,
         address challenger
-    ) external returns (uint256 slashAmountGwei) {
+    ) external returns (uint256 slashAmountWei) {
         // Recover the slashing evidence
         // commitment: signature to EXCLUDE a tx
         // proof: MPT inclusion proof
@@ -74,14 +74,14 @@ contract StateLockSlasher is ISlasher, PreconfStructs {
         _verifyInclusionProof(txCommitment, proof, delegation.committer);
 
         // Return the slash amount to the URC slasher
-        slashAmountGwei = SLASH_AMOUNT_GWEI;
+        slashAmountWei = SLASH_AMOUNT_WEI;
     }
 
     function slashFromOptIn(
         ISlasher.Commitment calldata commitment,
         bytes calldata evidence,
         address challenger
-    ) external returns (uint256 slashAmountGwei) {
+    ) external returns (uint256 slashAmountWei) {
         // unused in this example
     }
 

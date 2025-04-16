@@ -31,15 +31,15 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
 
     InclusionPreconfSlasher slasher;
     BLS.G1Point delegatePubKey;
-    uint256 slashAmountGwei = 1 ether / 1 gwei; // slash 1 ether
+    uint256 slashAmountWei = 1 ether;
     uint256 collateral = 1.1 ether;
     uint256 committerSecretKey;
     address committer;
 
     function setUp() public {
         vm.createSelectFork(vm.rpcUrl("mainnet"));
-        registry = new Registry();
-        slasher = new InclusionPreconfSlasher(slashAmountGwei, address(registry));
+        registry = new Registry(defaultConfig());
+        slasher = new InclusionPreconfSlasher(slashAmountWei, address(registry));
         delegatePubKey = BLS.toPublicKey(SECRET_KEY_2);
         (committer, committerSecretKey) = makeAddrAndKey("commitmentsKey");
         vm.deal(challenger, 100 ether);
@@ -83,8 +83,8 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
         uint256 inclusionBlockNumber = 20_785_012;
 
         // Advance before the fraud proof window
-        vm.roll(inclusionBlockNumber - registry.FRAUD_PROOF_WINDOW());
-        vm.warp(inclusionBlockNumber - registry.FRAUD_PROOF_WINDOW() * 12);
+        vm.roll(inclusionBlockNumber - registry.getConfig().fraudProofWindow);
+        vm.warp(inclusionBlockNumber - registry.getConfig().fraudProofWindow * 12);
 
         // Register and delegate
         result = setupRegistration(operator, delegate, 9994114 - 100);
@@ -172,8 +172,8 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
         vm.deal(alice, 100 ether);
 
         // Set block to before fraud proof window
-        vm.roll(inclusionBlockNumber - registry.FRAUD_PROOF_WINDOW());
-        vm.warp(inclusionBlockNumber - registry.FRAUD_PROOF_WINDOW() * 12);
+        vm.roll(inclusionBlockNumber - registry.getConfig().fraudProofWindow);
+        vm.warp(inclusionBlockNumber - registry.getConfig().fraudProofWindow * 12);
 
         // Register with a soon-to-expire delegation
         bytes memory metadata = abi.encode(delegate);
@@ -230,41 +230,27 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
         vm.warp(block.timestamp + slasher.CHALLENGE_WINDOW() + 1);
 
         // Merkle proof for URC registration
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
-        bytes32[] memory registrationProof = MerkleTree.generateProof(
-            leaves,
-            0 // leaf index
-        );
+        IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(result.registrations, operator, 0);
 
         // Slash via URC
         vm.prank(challenger);
-        registry.slashCommitment(
-            result.registrationRoot,
-            result.registrations[0].signature,
-            registrationProof,
-            0, // leaf index
-            result.signedDelegation,
-            signedCommitment,
-            abi.encode(inclusionProof)
-        );
+        registry.slashCommitment(proof, result.signedDelegation, signedCommitment, abi.encode(inclusionProof));
 
-        _verifySlashCommitmentBalances(
-            challenger, slashAmountGwei * 1 gwei, 0, challengerBalanceBefore, urcBalanceBefore
-        );
+        _verifySlashCommitmentBalances(challenger, slashAmountWei, 0, challengerBalanceBefore, urcBalanceBefore);
 
         // Retrieve operator data
-        OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
+        IRegistry.OperatorData memory operatorData = registry.getOperatorData(result.registrationRoot);
 
         // Verify operator's slashedAt is set
         assertEq(operatorData.slashedAt, block.number, "slashedAt not set");
 
         // Verify operator's collateralGwei is decremented
-        assertEq(operatorData.collateralGwei, collateral / 1 gwei - slashAmountGwei, "collateralGwei not decremented");
+        assertEq(operatorData.collateralWei, collateral - slashAmountWei, "collateralWei not decremented");
 
         // Verify the slashedBefore mapping is set
         bytes32 slashingDigest =
             keccak256(abi.encode(result.signedDelegation, signedCommitment, result.registrationRoot));
-        assertEq(registry.slashedBefore(slashingDigest), true, "slashedBefore not set");
+        assertEq(registry.slashingEvidenceAlreadyUsed(slashingDigest), true, "slashedBefore not set");
     }
 
     function test_revert_slash_wrongChallenger() public {
@@ -283,22 +269,12 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
         vm.warp(block.timestamp + slasher.CHALLENGE_WINDOW() + 1);
 
         // Merkle proof for URC registration
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
-        uint256 leafIndex = 0;
-        bytes32[] memory registrationProof = MerkleTree.generateProof(leaves, leafIndex);
+        IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(result.registrations, operator, 0);
 
         // Try to slash as different address (not the original challenger)
         vm.prank(operator);
         vm.expectRevert(PreconfStructs.WrongChallengerAddress.selector);
-        registry.slashCommitment(
-            result.registrationRoot,
-            result.registrations[0].signature,
-            registrationProof,
-            leafIndex,
-            result.signedDelegation,
-            signedCommitment,
-            abi.encode(inclusionProof)
-        );
+        registry.slashCommitment(proof, result.signedDelegation, signedCommitment, abi.encode(inclusionProof));
     }
 
     function test_revert_slash_notURC() public {

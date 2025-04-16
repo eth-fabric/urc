@@ -13,8 +13,16 @@ contract RegistryScript is Script {
         // Start broadcasting transactions
         vm.startBroadcast(deployerPrivateKey);
 
+        IRegistry.Config memory config = IRegistry.Config({
+            minCollateralWei: 0.1 ether,
+            fraudProofWindow: 7200,
+            unregistrationDelay: 7200,
+            slashWindow: 7200,
+            optInDelay: 7200
+        });
+
         // Deploy the Registry contract
-        Registry registry = new Registry();
+        Registry registry = new Registry(config);
 
         // Log the deployed address
         console.log("Registry deployed to:", address(registry));
