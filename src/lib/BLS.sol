@@ -325,6 +325,67 @@ library BLS {
         ];
     }
 
+    /**
+     * @notice Negates a G1 point, by reflecting it over the x-axis
+     * @dev Adapted from https://github.com/NethermindEth/Taiko-Preconf-AVS/blob/004d407105578a83c4815e7ec2c55ec467b9ed3f/SmartContracts/src/libraries/BLS12381.sol#L124
+     * @dev Assumes that the Y coordinate is always less than the field modulus
+     * @param point The G1 point to negate
+     */
+    function negate(G1Point memory point) internal pure returns (G1Point memory) {
+        uint256[2] memory fieldModulus = baseFieldModulus();
+        uint256[2] memory yNeg;
+
+        // Perform word-wise elementary subtraction
+        if (fieldModulus[1] < point.y.b) {
+            yNeg[1] = type(uint256).max - (point.y.b - fieldModulus[1]) + 1;
+            fieldModulus[0] -= 1; // borrow
+        } else {
+            yNeg[1] = fieldModulus[1] - point.y.b;
+        }
+        yNeg[0] = fieldModulus[0] - point.y.a;
+
+        return G1Point({ x: point.x, y: Fp(yNeg[0], yNeg[1]) });
+    }
+
+    /**
+     * @notice Returns true if `a` is lexicographically greater than `b`
+     * @dev Adapted from https://github.com/NethermindEth/Taiko-Preconf-AVS/blob/004d407105578a83c4815e7ec2c55ec467b9ed3f/SmartContracts/src/libraries/BLS12381.sol#L124
+     * @dev It makes the comparison bit-wise.
+     * This functions also assumes that the passed values are 48-byte long BLS pub keys that have
+     * 16 functional bytes in the first word, and 32 bytes in the second.
+     */
+    // function _greaterThan(uint256[2] memory a, uint256[2] memory b) internal pure returns (bool) {
+    function _greaterThan(Fp memory a, Fp memory b) internal pure returns (bool) {
+        uint256 wordA;
+        uint256 wordB;
+        uint256 mask;
+
+        // Only compare the unequal words
+        if (a.a == b.a) {
+            wordA = a.b;
+            wordB = b.b;
+            mask = 1 << 255;
+        } else {
+            wordA = a.a;
+            wordB = b.a;
+            mask = 1 << 127; // Only check for lower 16 bytes in the first word
+        }
+
+        // We may safely set the control value to be less than 256 since it is guaranteed that the
+        // the loop returns if the first words are different.
+        for (uint256 i; i < 256; ++i) {
+            uint256 x = wordA & mask;
+            uint256 y = wordB & mask;
+
+            if (x == 0 && y != 0) return false;
+            if (x != 0 && y == 0) return true;
+
+            mask = mask >> 1;
+        }
+
+        return false;
+    }
+
     /// @notice Converts a private key to a public key by multiplying the generator point with the private key
     /// @param privateKey The private key to convert
     /// @return The public key
@@ -382,5 +443,27 @@ library BLS {
         g2Points[1] = messagePoint;
 
         return BLS.Pairing(g1Points, g2Points);
+    }
+
+    /**
+     * @notice Returns a G1Point in the compressed form
+     * @dev Adapted from https://github.com/NethermindEth/Taiko-Preconf-AVS/blob/004d407105578a83c4815e7ec2c55ec467b9ed3f/SmartContracts/src/libraries/BLS12381.sol#L124
+     * @dev Originally based on https://github.com/zcash/librustzcash/blob/6e0364cd42a2b3d2b958a54771ef51a8db79dd29/pairing/src/bls12_381/README.md#serialization
+     * @param point The G1 point to compress
+     */
+    function compress(G1Point memory point) internal pure returns (Fp memory) {
+        Fp memory r = point.x;
+
+        // Set the first MSB
+        r.a = r.a | (1 << 127);
+
+        // Second MSB is left to be 0 since we are assuming that no infinity points are involved
+
+        // Set the third MSB if point.y is lexicographically larger than the y in negated point
+        if (_greaterThan(point.y, negate(point).y)) {
+            r.a = r.a | (1 << 125);
+        }
+
+        return r;
     }
 }
