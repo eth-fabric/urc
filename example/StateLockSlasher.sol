@@ -49,6 +49,7 @@ contract StateLockSlasher is ISlasher, PreconfStructs {
     function slash(
         ISlasher.Delegation calldata delegation,
         ISlasher.Commitment calldata commitment,
+        address committer,
         bytes calldata evidence,
         address challenger
     ) external returns (uint256 slashAmountWei) {
@@ -75,14 +76,6 @@ contract StateLockSlasher is ISlasher, PreconfStructs {
 
         // Return the slash amount to the URC slasher
         slashAmountWei = SLASH_AMOUNT_WEI;
-    }
-
-    function slashFromOptIn(
-        ISlasher.Commitment calldata commitment,
-        bytes calldata evidence,
-        address challenger
-    ) external returns (uint256 slashAmountWei) {
-        // unused in this example
     }
 
     function _verifyInclusionProof(

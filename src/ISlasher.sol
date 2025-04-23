@@ -44,27 +44,21 @@ interface ISlasher {
         bytes signature;
     }
 
-    /// @notice Slash a proposer's BLS key for a given delegation
-    /// @dev The URC will call this function to slash a registered operator if supplied with a valid commitment and evidence
+    /// @notice Slash a proposer's BLS key for a given delegation and a commitment
+    /// @dev The URC will call this function to slash a registered operator if supplied with valid evidence
+    /// @dev Note that the `delegation` may be optional in cases where the slashing is due
+    /// @dev to a commitment that is not associated with an off-chain delegation
     /// @param delegation The delegation message
     /// @param commitment The commitment message
+    /// @param committer The address of the committer
     /// @param evidence Arbitrary evidence for the slashing
     /// @param challenger The address of the challenger
     /// @return slashAmountWei The amount of WEI slashed
     function slash(
         Delegation calldata delegation,
         Commitment calldata commitment,
+        address committer,
         bytes calldata evidence,
         address challenger
     ) external returns (uint256 slashAmountWei);
-
-    /// @notice Slash an operator for a given commitment
-    /// @dev The URC will call this function to slash a registered operator if supplied with a valid commitment and evidence. The assumption is that the operator has opted into the slasher protocol on-chain.
-    /// @param commitment The commitment message
-    /// @param evidence Arbitrary evidence for the slashing
-    /// @param challenger The address of the challenger
-    /// @return slashAmountWei The amount of WEI slashed
-    function slashFromOptIn(Commitment calldata commitment, bytes calldata evidence, address challenger)
-        external
-        returns (uint256 slashAmountWei);
 }
