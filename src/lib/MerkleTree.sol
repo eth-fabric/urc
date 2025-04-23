@@ -21,7 +21,6 @@ library MerkleTree {
     function generateTree(bytes32[] memory leaves) internal pure returns (bytes32) {
         if (leaves.length == 0) revert EmptyLeaves();
         if (leaves.length == 1) return leaves[0];
-        if (leaves.length > 256) revert LeavesTooLarge();
 
         uint256 _nextPowerOfTwo = nextPowerOfTwo(leaves.length);
         bytes32[] memory nodes = new bytes32[](_nextPowerOfTwo);
