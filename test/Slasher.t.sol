@@ -16,16 +16,10 @@ contract DummySlasher is ISlasher {
     function slash(
         ISlasher.Delegation calldata delegation,
         ISlasher.Commitment calldata commitment,
+        address committer,
         bytes calldata evidence,
         address challenger
     ) external returns (uint256 slashAmountWei) {
-        slashAmountWei = SLASH_AMOUNT_WEI;
-    }
-
-    function slashFromOptIn(ISlasher.Commitment calldata commitment, bytes calldata evidence, address challenger)
-        external
-        returns (uint256 slashAmountWei)
-    {
         slashAmountWei = SLASH_AMOUNT_WEI;
     }
 }

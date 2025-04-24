@@ -319,7 +319,7 @@ contract Registry is IRegistry {
 
         // Call the Slasher contract to slash the operator
         slashAmountWei = ISlasher(commitment.commitment.slasher).slash(
-            delegation.delegation, commitment.commitment, evidence, msg.sender
+            delegation.delegation, commitment.commitment, committer, evidence, msg.sender
         );
 
         // Handle the slashing accounting
@@ -356,9 +356,13 @@ contract Registry is IRegistry {
         // Set the operator's SlasherCommitment to slashed
         slasherCommitment.slashed = true;
 
+        // The Slasher interface requires a Delegation struct so we pass in an empty one
+        ISlasher.Delegation memory dummyDelegation;
+
         // Call the Slasher contract to slash the operator
-        slashAmountWei =
-            ISlasher(commitment.commitment.slasher).slashFromOptIn(commitment.commitment, evidence, msg.sender);
+        slashAmountWei = ISlasher(commitment.commitment.slasher).slash(
+            dummyDelegation, commitment.commitment, committer, evidence, msg.sender
+        );
 
         // Handle the slashing accounting
         _slashCommitment(registrationRoot, slashAmountWei, commitment.commitment.slasher);

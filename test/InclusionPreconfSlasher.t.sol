@@ -287,7 +287,11 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
         // Try to call slash directly (not through URC)
         vm.expectRevert(PreconfStructs.NotURC.selector);
         slasher.slash(
-            result.signedDelegation.delegation, signedCommitment.commitment, abi.encode(inclusionProof), address(0)
+            result.signedDelegation.delegation,
+            signedCommitment.commitment,
+            committer,
+            abi.encode(inclusionProof),
+            address(0)
         );
     }
 
