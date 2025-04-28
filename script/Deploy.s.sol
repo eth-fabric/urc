@@ -5,7 +5,7 @@ import "forge-std/Script.sol";
 import "../src/Registry.sol";
 
 contract DeployScript is Script {
-    // forge script script/Deploy.s.sol:DeployScript --sig "deploy()" --rpc-url $RPC_URL --account $FOUNDRY_WALLET --broadcast 
+    // forge script script/Deploy.s.sol:DeployScript --sig "deploy()" --rpc-url $RPC_URL --account $FOUNDRY_WALLET --broadcast
     function deploy() external {
         // Start broadcasting transactions
         vm.startBroadcast();
@@ -13,7 +13,7 @@ contract DeployScript is Script {
         // Read config from JSON file
         string memory configPath = "config/registry.json";
         string memory configJson = vm.readFile(configPath);
-        
+
         IRegistry.Config memory config = IRegistry.Config({
             minCollateralWei: uint80(vm.parseJsonUint(configJson, ".minCollateralWei")),
             fraudProofWindow: uint32(vm.parseJsonUint(configJson, ".fraudProofWindow")),
