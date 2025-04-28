@@ -293,8 +293,6 @@ contract Registry is IRegistry {
         ISlasher.SignedCommitment calldata commitment,
         bytes calldata evidence
     ) external isSlashableCommitment(proof.registrationRoot) returns (uint256 slashAmountWei) {
-        Operator storage operator = operators[proof.registrationRoot];
-
         // Calculate a unique identifier for the slashing evidence
         bytes32 slashingDigest = keccak256(abi.encode(delegation, commitment, proof.registrationRoot));
 
