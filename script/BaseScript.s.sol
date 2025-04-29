@@ -9,6 +9,18 @@ import "../src/lib/BLS.sol";
 contract BaseScript is Script {
     bytes public constant REGISTRATION_DOMAIN_SEPARATOR = "0x00555243"; // "URC" in little endian
 
+    struct RegistrationJson {
+        address owner;
+        bytes signedRegistrations;
+    }
+
+    struct RegistrationProofJson {
+        uint256 leafIndex;
+        bytes merkleProof;
+        bytes registration;
+        bytes32 registrationRoot;
+    }
+
     function _getDefaultJson(string memory _outfile, string memory _default)
         internal
         returns (string memory jsonFile, string memory jsonObj)
@@ -51,6 +63,85 @@ contract BaseScript is Script {
         for (uint256 i = 0; i < _n; i++) {
             signedRegistrations[i] = _signTestRegistration(privateKeyStart + i, _owner);
         }
+    }
+
+    function _writeSignedRegistrations(
+        address _owner,
+        IRegistry.SignedRegistration[] memory _registrations,
+        string memory _outfile
+    ) public {
+        // Write to json outfile if specified otherwise default "output/SignedRegistrations.json"
+        (string memory _jsonFile,) = _getDefaultJson(_outfile, "SignedRegistrations.json");
+
+        // Write the owner address to the json file
+        vm.writeJson(vm.toString(_owner), _jsonFile, ".owner");
+
+        // Encode the signed registrations as abi-encoded bytes
+        vm.writeJson(vm.toString(abi.encode(_registrations)), _jsonFile, ".signedRegistrations");
+
+        console.log("SignedRegistrations written to", _jsonFile);
+    }
+
+    function _readSignedRegistrations(string memory _infile)
+        public
+        view
+        returns (address owner, IRegistry.SignedRegistration[] memory registrations)
+    {
+        string memory jsonFile = string(abi.encodePacked("script/output/", _infile));
+        string memory json = vm.readFile(jsonFile);
+        bytes memory data = vm.parseJson(json);
+
+        // Decode the RegistrationJson
+        RegistrationJson memory registrationJson = abi.decode(data, (RegistrationJson));
+
+        owner = registrationJson.owner;
+        registrations = abi.decode(registrationJson.signedRegistrations, (IRegistry.SignedRegistration[]));
+
+        console.log("Owner address:", registrationJson.owner);
+        console.log("Total signed registrations:", registrations.length);
+        console.log("Pubkeys:");
+        console.log(_buildPubkeyStrings(registrations));
+    }
+
+    function _writeRegistrationProof(IRegistry.RegistrationProof memory proof, string memory _outfile) public {
+        // Write to json outfile if specified otherwise default "output/SignedRegistrations.json"
+        (string memory _jsonFile,) = _getDefaultJson(_outfile, "RegistrationProof.json");
+
+        // Write the registrationRoot to the json file
+        vm.writeJson(vm.toString(proof.registrationRoot), _jsonFile, ".registrationRoot");
+
+        // Write the abi-encoded SignedRegistration to the json file
+        vm.writeJson(vm.toString(abi.encode(proof.registration)), _jsonFile, ".registration");
+
+        // Write the abi-encoded merklProof bytes32[] to the json file
+        vm.writeJson(vm.toString(abi.encode(proof.merkleProof)), _jsonFile, ".merkleProof");
+
+        // Write the leafIndex to the json file
+        vm.writeJson(vm.toString(proof.leafIndex), _jsonFile, ".leafIndex");
+
+        console.log("RegistrationProof written to", _jsonFile);
+    }
+
+    function _readRegistrationProof(string memory _infile)
+        public
+        view
+        returns (IRegistry.RegistrationProof memory proof)
+    {
+        string memory jsonFile = string(abi.encodePacked("script/output/", _infile));
+        string memory json = vm.readFile(jsonFile);
+        bytes memory data = vm.parseJson(json);
+
+        // Decode the wrapper RegistrationProofJson struct
+        RegistrationProofJson memory registrationProofJson = abi.decode(data, (RegistrationProofJson));
+
+        // Copy over to correct struct
+        proof.registrationRoot = registrationProofJson.registrationRoot;
+
+        proof.registration = abi.decode(registrationProofJson.registration, (IRegistry.SignedRegistration));
+
+        proof.merkleProof = abi.decode(registrationProofJson.merkleProof, (bytes32[]));
+
+        proof.leafIndex = uint256(registrationProofJson.leafIndex);
     }
 
     function _buildPubkeyStrings(IRegistry.SignedRegistration[] memory registrations)
