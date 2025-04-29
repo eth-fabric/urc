@@ -35,4 +35,25 @@ contract OptInAndOutScript is BaseScript {
 
         vm.stopBroadcast();
     }
+
+    // forge script script/OptInAndOut.s.sol:OptInAndOutScript --sig "optOutOfSlasher(address,bytes32,address)" $REGISTRY_ADDRESS $REGISTRATION_ROOT $SLASHER --account $FOUNDRY_WALLET --rpc-url $RPC_URL --broadcast
+    function optOutOfSlasher(address _registry, bytes32 registrationRoot, address slasher) external {
+        // Start broadcasting transactions
+        vm.startBroadcast();
+
+        // Confirm with user
+        string memory prompt = string(
+            abi.encodePacked("Are you sure you want to opt out of slasher: ", vm.toString(slasher), "? 1=yes, 0=no")
+        );
+        uint256 answer = vm.promptUint(prompt);
+        if (answer != 1) revert("incorrect slasher");
+
+        // Get reference to the registry
+        IRegistry registry = IRegistry(_registry);
+
+        // Call optInToSlasher
+        registry.optOutOfSlasher(registrationRoot, slasher);
+
+        vm.stopBroadcast();
+    }
 }
