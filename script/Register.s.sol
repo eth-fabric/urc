@@ -53,6 +53,37 @@ contract RegisterScript is BaseScript {
         vm.stopBroadcast();
     }
 
+    // forge script script/Register.s.sol:RegisterScript --sig "unregister(address,bytes32)" $REGISTRY_ADDRESS $REGISTRATION_ROOT --account $FOUNDRY_WALLET --rpc-url $RPC_URL --broadcast
+    function unregister(address _registry, bytes32 registrationRoot) external {
+        // Start broadcasting transactions
+        vm.startBroadcast();
+
+        // Confirm with user
+        string memory prompt = string("Are you sure you want to unregister? 1=yes, 0=no");
+        uint256 answer = vm.promptUint(prompt);
+        if (answer != 1) revert("aborting");
+
+        // Get reference to the registry
+        IRegistry registry = IRegistry(_registry);
+
+        // Call register
+        registry.unregister(registrationRoot);
+
+        // Logs
+        console.log("Success! started unregistration process");
+        console.log(
+            string(
+                abi.encodePacked(
+                    "Can complete registration in ",
+                    vm.toString(IRegistry(_registry).getConfig().unregistrationDelay),
+                    " blocks"
+                )
+            )
+        );
+
+        vm.stopBroadcast();
+    }
+
     // forge script script/Register.s.sol:RegisterScript --sig "getRegistrationProof(address,bytes,string,string)" $REGISTRY_ADDRESS $PUBKEY $INFILE $OUTFILE --account $FOUNDRY_WALLET --rpc-url $RPC_URL
     function getRegistrationProof(
         address _registry,
