@@ -1,6 +1,6 @@
 # Script Usage
 
-Example environment variable values are found in [`.env`](./.env). The scripts assume your EOA is a keystore accessible via the `--account` flag, see [`cast wallet`](https://book.getfoundry.sh/reference/cli/cast/wallet) for more info.
+Example environment variable values are found in [`example.env`](./example.env). The scripts assume your EOA is a keystore accessible via the `--account` flag, see [`cast wallet`](https://book.getfoundry.sh/reference/cli/cast/wallet) for more info.
 
 ## Core URC Admin functions
 ### Deploying `Registry.sol`
