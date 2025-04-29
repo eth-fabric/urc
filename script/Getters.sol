@@ -3,9 +3,10 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import "forge-std/Script.sol";
 import "../src/IRegistry.sol";
+import "./BaseScript.s.sol";
 
-contract HelpersScript is Script {
-    // forge script script/Helpers.s.sol:HelpersScript --sig "getConfig(address,string)" $REGISTRY_ADDRESS $OUTFILE --rpc-url $RPC_URL
+contract GettersScript is BaseScript {
+    // forge script script/Getters.sol:GettersScript --sig "getConfig(address,string)" $REGISTRY_ADDRESS $OUTFILE --rpc-url $RPC_URL
     function getConfig(address _registry, string memory outfile) public returns (IRegistry.Config memory config) {
         // Get reference to the registry
         IRegistry registry = IRegistry(_registry);
@@ -31,7 +32,7 @@ contract HelpersScript is Script {
         console.log("Config written to", jsonFile);
     }
 
-    // forge script script/Helpers.s.sol:HelpersScript --sig "getOperatorData(address,bytes32,string)" $REGISTRY_ADDRESS $REGISTRATION_ROOT $OUTFILE --rpc-url $RPC_URL
+    // forge script script/Getters.sol:GettersScript --sig "getOperatorData(address,bytes32,string)" $REGISTRY_ADDRESS $REGISTRATION_ROOT $OUTFILE --rpc-url $RPC_URL
     function getOperatorData(address _registry, bytes32 _registrationRoot, string memory outfile)
         public
         returns (IRegistry.OperatorData memory operatorData)
@@ -64,7 +65,7 @@ contract HelpersScript is Script {
         console.log("OperatorData written to", jsonFile);
     }
 
-    // forge script script/Helpers.s.sol:HelpersScript --sig "getSlasherCommitment(address,bytes32,address,string)" $REGISTRY_ADDRESS $REGISTRATION_ROOT $SLASHER_ADDRESS $OUTFILE --rpc-url $RPC_URL
+    // forge script script/Getters.sol:GettersScript --sig "getSlasherCommitment(address,bytes32,address,string)" $REGISTRY_ADDRESS $REGISTRATION_ROOT $SLASHER_ADDRESS $OUTFILE --rpc-url $RPC_URL
     function getSlasherCommitment(address _registry, bytes32 _registrationRoot, address _slasher, string memory outfile)
         public
         returns (IRegistry.SlasherCommitment memory slasherCommitment)
@@ -90,23 +91,17 @@ contract HelpersScript is Script {
         console.log("SlasherCommitment written to", jsonFile);
     }
 
-    function _getDefaultJson(string memory _outfile, string memory _default)
-        internal
-        returns (string memory jsonFile, string memory jsonObj)
-    {
-        // Get the file path for the output json
-        if (bytes(_outfile).length > 0) {
-            jsonFile = string(abi.encodePacked("script/output/", _outfile));
-        } else {
-            jsonFile = string(abi.encodePacked("script/output/", _default));
-        }
+    function getRegistrationProof(
+        address _registry,
+        address _owner,
+        uint256 _leafIndex,
+        string memory registrationsFile,
+        string memory outfile
+    ) public returns (IRegistry.RegistrationProof memory registrationProof) {
+        // Get reference to the registry
+        IRegistry registry = IRegistry(_registry);
 
-        // Read the default json object
-        jsonObj = vm.readFile(string(abi.encodePacked("script/output/", _default)));
-
-        // Copy the default json object to the new file to create the file if it doesn't exist
-        vm.writeFile(jsonFile, jsonObj);
-
-        return (jsonFile, jsonObj);
+        // Get the registration proof
+        // registrationProof = registry.getRegistrationProof(_owner, _leafIndex);
     }
 }
