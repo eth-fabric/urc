@@ -76,7 +76,7 @@ contract GettersScript is BaseScript {
         // Get the slasher commitment
         slasherCommitment = registry.getSlasherCommitment(_registrationRoot, _slasher);
 
-        console.log("Comitter:", slasherCommitment.committer);
+        console.log("Committer:", slasherCommitment.committer);
         console.log("Opted in at:", slasherCommitment.optedInAt);
         console.log("Opted out at:", slasherCommitment.optedOutAt);
         console.log("Slashed:", slasherCommitment.slashed);
