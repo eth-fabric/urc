@@ -12,6 +12,13 @@ contract RegisterScript is BaseScript {
         bytes signedRegistrations;
     }
 
+    struct RegistrationProofJson {
+        uint256 leafIndex;
+        bytes merkleProof;
+        bytes registration;
+        bytes32 registrationRoot;
+    }
+
     // forge script script/Register.s.sol:RegisterScript --sig "register(address,uint256,string)" $REGISTRY_ADDRESS $COLLATERAL $INFILE --account $FOUNDRY_WALLET --rpc-url $RPC_URL --broadcast
     function register(address _registry, uint256 collateralWei, string memory signedRegistrationsFile) external {
         // Start broadcasting transactions
@@ -44,6 +51,49 @@ contract RegisterScript is BaseScript {
         console.logBytes32(registrationRoot);
 
         vm.stopBroadcast();
+    }
+
+    // forge script script/Register.s.sol:RegisterScript --sig "getRegistrationProof(address,bytes,string,string)" $REGISTRY_ADDRESS $PUBKEY $INFILE $OUTFILE --account $FOUNDRY_WALLET --rpc-url $RPC_URL
+    function getRegistrationProof(
+        address _registry,
+        bytes memory pubkey,
+        string memory signedRegistrationsFile,
+        string memory outfile
+    ) public returns (IRegistry.RegistrationProof memory proof) {
+        require(pubkey.length == 48, "invalid pubkey length");
+
+        // Read user's pre-signed registrations
+        (address owner, IRegistry.SignedRegistration[] memory registrations) =
+            _readSignedRegistrations(signedRegistrationsFile);
+
+        // Find the leafindex from the pubkey
+        uint256 leafIndex = type(uint256).max;
+        bytes32 hashedPubKey = keccak256(pubkey);
+        for (uint256 i = 0; i < registrations.length; i++) {
+            bytes memory compressed = abi.encode(BLS.compress(registrations[i].pubkey));
+            bytes memory pubkeyPretty = _prettyPubKey(compressed);
+            if (hashedPubKey == keccak256(pubkeyPretty)) {
+                leafIndex = i;
+                break;
+            }
+        }
+
+        console.log("Pubkey matches at leafIndex:", leafIndex);
+
+        if (leafIndex == type(uint256).max) revert("pubkey not found in file");
+
+        // Get reference to the registry
+        IRegistry registry = IRegistry(_registry);
+
+        // Call getRegistrationProof
+        proof = registry.getRegistrationProof(registrations, owner, leafIndex);
+
+        bytes32 writeProofHash = keccak256(abi.encode(proof));
+        _writeRegistrationProof(proof, outfile);
+
+        bytes32 readProofHash = keccak256(abi.encode(_readRegistrationProof(outfile)));
+
+        require(writeProofHash == readProofHash, "Something went wrong!");
     }
 
     /// @dev NOT MEANT FOR PRODUCTION USE
@@ -103,20 +153,40 @@ contract RegisterScript is BaseScript {
         console.log(_buildPubkeyStrings(registrations));
     }
 
-    function _buildPubkeyStrings(IRegistry.SignedRegistration[] memory registrations)
-        internal
-        returns (string memory)
-    {
-        string memory s;
-        for (uint256 i = 0; i < registrations.length; i++) {
-            BLS.Fp memory compressed = BLS.compress(registrations[i].pubkey);
-            bytes memory pubkey = abi.encode(compressed);
-            bytes memory pubkeyPretty = new bytes(48);
-            for (uint256 j = 16; j < pubkey.length; j++) {
-                pubkeyPretty[j - 16] = pubkey[j];
-            }
-            s = string(abi.encodePacked(s, vm.toString(pubkeyPretty), ",\n"));
-        }
-        return s;
+    function _writeRegistrationProof(IRegistry.RegistrationProof memory proof, string memory _outfile) public {
+        // Write to json outfile if specified otherwise default "output/SignedRegistrations.json"
+        (string memory _jsonFile,) = _getDefaultJson(_outfile, "RegistrationProof.json");
+
+        // Write the registrationRoot to the json file
+        vm.writeJson(vm.toString(proof.registrationRoot), _jsonFile, ".registrationRoot");
+
+        // Write the abi-encoded SignedRegistration to the json file
+        vm.writeJson(vm.toString(abi.encode(proof.registration)), _jsonFile, ".registration");
+
+        // Write the abi-encoded merklProof bytes32[] to the json file
+        vm.writeJson(vm.toString(abi.encode(proof.merkleProof)), _jsonFile, ".merkleProof");
+
+        // Write the leafIndex to the json file
+        vm.writeJson(vm.toString(proof.leafIndex), _jsonFile, ".leafIndex");
+
+        console.log("RegistrationProof written to", _jsonFile);
+    }
+
+    function _readRegistrationProof(string memory _infile) public returns (IRegistry.RegistrationProof memory proof) {
+        string memory jsonFile = string(abi.encodePacked("script/output/", _infile));
+        string memory json = vm.readFile(jsonFile);
+        bytes memory data = vm.parseJson(json);
+
+        // Decode the wrapper RegistrationProofJson struct
+        RegistrationProofJson memory registrationProofJson = abi.decode(data, (RegistrationProofJson));
+
+        // Copy over to correct struct
+        proof.registrationRoot = registrationProofJson.registrationRoot;
+
+        proof.registration = abi.decode(registrationProofJson.registration, (IRegistry.SignedRegistration));
+
+        proof.merkleProof = abi.decode(registrationProofJson.merkleProof, (bytes32[]));
+
+        proof.leafIndex = uint256(registrationProofJson.leafIndex);
     }
 }

@@ -3,6 +3,8 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import "forge-std/Script.sol";
 import "../src/IRegistry.sol";
+import "../src/lib/MerkleTree.sol";
+import "../src/lib/BLS.sol";
 
 contract BaseScript is Script {
     bytes public constant REGISTRATION_DOMAIN_SEPARATOR = "0x00555243"; // "URC" in little endian
@@ -49,5 +51,28 @@ contract BaseScript is Script {
         for (uint256 i = 0; i < _n; i++) {
             signedRegistrations[i] = _signTestRegistration(privateKeyStart + i, _owner);
         }
+    }
+
+    function _buildPubkeyStrings(IRegistry.SignedRegistration[] memory registrations)
+        internal
+        pure
+        returns (string memory)
+    {
+        string memory s;
+        for (uint256 i = 0; i < registrations.length; i++) {
+            BLS.Fp memory compressed = BLS.compress(registrations[i].pubkey);
+            bytes memory pubkey = abi.encode(compressed);
+            bytes memory pubkeyPretty = _prettyPubKey(pubkey);
+            s = string(abi.encodePacked(s, vm.toString(pubkeyPretty), ",\n"));
+        }
+        return s;
+    }
+
+    function _prettyPubKey(bytes memory pubkey) internal pure returns (bytes memory) {
+        bytes memory pubkeyPretty = new bytes(48);
+        for (uint256 j = 16; j < pubkey.length; j++) {
+            pubkeyPretty[j - 16] = pubkey[j];
+        }
+        return pubkeyPretty;
     }
 }
