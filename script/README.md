@@ -16,7 +16,7 @@ Running this script will generate `N` `SignedRegistration` messages signed by de
 forge script script/Register.s.sol:RegisterScript --sig "nDummyRegistrations(uint256,address,string)" $N $OWNER $SIGNED_REGISTRATIONS_FILE
 ```
 ### Registering to the URC
-Running this script will call `register()` using the supplied `SignedRegistrations` located in `script/output/{$SIGNED_REGISTRATIONS_FILE}` following the template file [SignedRegistrations.json](./output/SignedRegistrations.json). `$COLLATERAL` wei will be transfered from the caller's account to the URC.
+Running this script will call `register()` using the supplied `SignedRegistrations` located in `script/output/{$SIGNED_REGISTRATIONS_FILE}` following the template file [SignedRegistrations.json](./output/SignedRegistrations.json). `$COLLATERAL` wei will be transferred from the caller's account to the URC.
 ```bash
 forge script script/Register.s.sol:RegisterScript --sig "register(address,uint256,string)" $REGISTRY_ADDRESS $COLLATERAL $SIGNED_REGISTRATIONS_FILE --account $FOUNDRY_WALLET --rpc-url $RPC_URL --broadcast
 ```
@@ -39,6 +39,27 @@ Running this script will call `optOutOfSlasher()` for the specified `$REGISTRATI
 
 ```bash
 forge script script/OptInAndOut.s.sol:OptInAndOutScript --sig "optOutOfSlasher(address,bytes32,address)" $REGISTRY_ADDRESS $REGISTRATION_ROOT $SLASHER --account $FOUNDRY_WALLET --rpc-url $RPC_URL --broadcast
+```
+
+### Adding operator collateral
+Running this script will call `addCollateral()` for the specified `$REGISTRATION_ROOT`. The caller must be the registered operator's owner address. `$COLLATERAL` wei will be transferred from the caller's account to the URC.
+
+```bash
+forge script script/Collateral.s.sol:CollateralScript --sig "addCollateral(address,bytes32,uint256)" $REGISTRY_ADDRESS $REGISTRATION_ROOT $COLLATERAL --account $FOUNDRY_WALLET --rpc-url $RPC_URL --broadcast
+```
+
+### Claiming operator collateral
+Running this script will call `claimCollateral()` for the specified `$REGISTRATION_ROOT`. The caller must be the registered operator's owner address. The unregistration delay must have passed since calling `unregister()`.
+
+```bash
+forge script script/Collateral.s.sol:CollateralScript --sig "claimCollateral(address,bytes32)" $REGISTRY_ADDRESS $REGISTRATION_ROOT --account $FOUNDRY_WALLET --rpc-url $RPC_URL --broadcast
+```
+
+### Claiming slashed collateral
+Running this script will call `claimSlashedCollateral()` for the specified `$REGISTRATION_ROOT`. The caller must be the registered operator's owner address. The slash window must have passed since the operator was slashed.
+
+```bash
+forge script script/Collateral.s.sol:CollateralScript --sig "claimSlashedCollateral(address,bytes32)" $REGISTRY_ADDRESS $REGISTRATION_ROOT --account $FOUNDRY_WALLET --rpc-url $RPC_URL --broadcast
 ```
 
 ## URC Slashing functions
