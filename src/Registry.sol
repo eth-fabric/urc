@@ -69,7 +69,7 @@ contract Registry is IRegistry {
         newOperator.data.owner = owner;
         newOperator.data.collateralWei = uint80(msg.value);
         newOperator.data.numKeys = uint16(registrations.length);
-        newOperator.data.registeredAt = uint48(block.number);
+        newOperator.data.registeredAt = uint48(block.timestamp);
         newOperator.data.unregisteredAt = type(uint48).max;
         newOperator.data.slashedAt = 0;
 
@@ -107,7 +107,7 @@ contract Registry is IRegistry {
         }
 
         // Save the block number; they must wait for the unregistration delay to claim collateral
-        operator.data.unregisteredAt = uint48(block.number);
+        operator.data.unregisteredAt = uint48(block.timestamp);
 
         emit OperatorUnregistered(registrationRoot);
     }
@@ -127,7 +127,7 @@ contract Registry is IRegistry {
         }
 
         // Operator cannot opt in before the fraud proof window elapses
-        if (block.number < operator.data.registeredAt + config.fraudProofWindow) {
+        if (block.timestamp < operator.data.registeredAt + config.fraudProofWindow) {
             revert FraudProofWindowNotMet();
         }
 
@@ -145,13 +145,12 @@ contract Registry is IRegistry {
         }
 
         // Fix: If previously opted out, enforce delay before allowing new opt-in
-        // Changed from block.timestamp to block.number to match the optedOutAt type
-        if (slasherCommitment.optedOutAt != 0 && block.number < slasherCommitment.optedOutAt + config.optInDelay) {
+        if (slasherCommitment.optedOutAt != 0 && block.timestamp < slasherCommitment.optedOutAt + config.optInDelay) {
             revert OptInDelayNotMet();
         }
 
         // Save the block number and committer
-        slasherCommitment.optedInAt = uint48(block.number);
+        slasherCommitment.optedInAt = uint48(block.timestamp);
         slasherCommitment.optedOutAt = 0;
         slasherCommitment.committer = committer;
 
@@ -181,12 +180,12 @@ contract Registry is IRegistry {
         }
 
         // Enforce a delay before allowing opt-out
-        if (block.number < slasherCommitment.optedInAt + config.optInDelay) {
+        if (block.timestamp < slasherCommitment.optedInAt + config.optInDelay) {
             revert OptInDelayNotMet();
         }
 
         // Save the block number
-        slasherCommitment.optedOutAt = uint48(block.number);
+        slasherCommitment.optedOutAt = uint48(block.timestamp);
 
         emit OperatorOptedOut(registrationRoot, slasher);
     }
@@ -205,21 +204,21 @@ contract Registry is IRegistry {
         }
 
         // Operator is not liable for slashings before the fraud proof window elapses
-        if (block.number < operator.registeredAt + config.fraudProofWindow) {
+        if (block.timestamp < operator.registeredAt + config.fraudProofWindow) {
             revert FraudProofWindowNotMet();
         }
 
         // Operator is not liable for slashings after unregister and the delay has passed
         if (
             operator.unregisteredAt != type(uint48).max
-                && block.number > operator.unregisteredAt + config.unregistrationDelay
+                && block.timestamp > operator.unregisteredAt + config.unregistrationDelay
         ) {
             revert OperatorAlreadyUnregistered();
         }
 
         // Slashing can only occur within the slash window after the first reported slashing
         // After the slash window has passed, the operator can claim collateral
-        if (operator.slashedAt != 0 && block.number > operator.slashedAt + config.slashWindow) {
+        if (operator.slashedAt != 0 && block.timestamp > operator.slashedAt + config.slashWindow) {
             revert SlashWindowExpired();
         }
 
@@ -236,7 +235,7 @@ contract Registry is IRegistry {
         }
 
         // Can only slash registrations within the fraud proof window
-        if (block.number > operator.data.registeredAt + config.fraudProofWindow) {
+        if (block.timestamp > operator.data.registeredAt + config.fraudProofWindow) {
             revert FraudProofWindowExpired();
         }
 
@@ -265,7 +264,7 @@ contract Registry is IRegistry {
 
         // Save timestamp only once to start the slash window
         if (operator.data.slashedAt == 0) {
-            operator.data.slashedAt = uint48(block.number);
+            operator.data.slashedAt = uint48(block.timestamp);
         }
 
         // Decrement operator's collateral
@@ -350,7 +349,7 @@ contract Registry is IRegistry {
 
         // Save timestamp only once to start the slash window
         if (operator.data.slashedAt == 0) {
-            operator.data.slashedAt = uint48(block.number);
+            operator.data.slashedAt = uint48(block.timestamp);
         }
 
         // Set the operator's SlasherCommitment to slashed
@@ -397,21 +396,21 @@ contract Registry is IRegistry {
         }
 
         // Operator is not liable for slashings before the fraud proof window elapses
-        if (block.number < operator.data.registeredAt + config.fraudProofWindow) {
+        if (block.timestamp < operator.data.registeredAt + config.fraudProofWindow) {
             revert FraudProofWindowNotMet();
         }
 
         // Operator is not liable for slashings after unregister and the delay has passed
         if (
             operator.data.unregisteredAt != type(uint48).max
-                && block.number > operator.data.unregisteredAt + config.unregistrationDelay
+                && block.timestamp > operator.data.unregisteredAt + config.unregistrationDelay
         ) {
             revert OperatorAlreadyUnregistered();
         }
 
         // Slashing can only occur within the slash window after the first reported slashing
         // After the slash window has passed, the operator can claim collateral
-        if (operator.data.slashedAt != 0 && block.number > operator.data.slashedAt + config.slashWindow) {
+        if (operator.data.slashedAt != 0 && block.timestamp > operator.data.slashedAt + config.slashWindow) {
             revert SlashWindowExpired();
         }
 
@@ -430,7 +429,7 @@ contract Registry is IRegistry {
 
         // Save timestamp only once to start the slash window
         if (operator.data.slashedAt == 0) {
-            operator.data.slashedAt = uint48(block.number);
+            operator.data.slashedAt = uint48(block.timestamp);
         }
 
         // Decrement operator's collateral
@@ -504,7 +503,7 @@ contract Registry is IRegistry {
         }
 
         // Check that enough time has passed
-        if (block.number < operator.data.unregisteredAt + config.unregistrationDelay) {
+        if (block.timestamp < operator.data.unregisteredAt + config.unregistrationDelay) {
             revert UnregistrationDelayNotMet();
         }
 
@@ -545,7 +544,7 @@ contract Registry is IRegistry {
         }
 
         // Check that enough time has passed
-        if (block.number < operator.data.slashedAt + config.slashWindow) {
+        if (block.timestamp < operator.data.slashedAt + config.slashWindow) {
             revert SlashWindowNotMet();
         }
 
@@ -692,7 +691,7 @@ contract Registry is IRegistry {
 
         // Save timestamp only once to start the slash window
         if (operator.data.slashedAt == 0) {
-            operator.data.slashedAt = uint48(block.number);
+            operator.data.slashedAt = uint48(block.timestamp);
         }
 
         // Prevent slashing more than the operator's collateral

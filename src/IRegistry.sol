@@ -44,11 +44,11 @@ interface IRegistry {
         uint80 collateralWei;
         /// The number of keys registered per operator
         uint16 numKeys;
-        /// The block number when registration occurred
+        /// The timestamp when registration occurred
         uint48 registeredAt;
-        /// The block number when deregistration occurred
+        /// The timestamp when deregistration occurred
         uint48 unregisteredAt;
-        /// The block number when slashed from breaking a commitment
+        /// The timestamp when slashed from breaking a commitment
         uint48 slashedAt;
         /// A field to simulate deletion of the operator, since deleting a struct with a nested mapping is not safe
         bool deleted;
@@ -70,9 +70,9 @@ interface IRegistry {
     struct SlasherCommitment {
         /// The address of the key used for commitments
         address committer;
-        /// The block number when the operator opted in
+        /// The timestamp when the operator opted in
         uint48 optedInAt;
-        /// The block number when the operator opted out
+        /// The timestamp when the operator opted out
         uint48 optedOutAt;
         /// Whether they have been slashed or not
         bool slashed;
