@@ -23,10 +23,10 @@ contract UnitTestHelper is Test {
     function defaultConfig() internal pure returns (IRegistry.Config memory) {
         return IRegistry.Config({
             minCollateralWei: 0.1 ether,
-            fraudProofWindow: 7200,
-            unregistrationDelay: 7200,
-            slashWindow: 7200,
-            optInDelay: 7200
+            fraudProofWindow: 86400,
+            unregistrationDelay: 86400,
+            slashWindow: 86400,
+            optInDelay: 86400
         });
     }
 
