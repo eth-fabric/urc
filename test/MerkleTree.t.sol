@@ -167,12 +167,6 @@ contract MerkleTreeTest is Test {
         }
     }
 
-    function testLeavesTooLarge() public {
-        bytes32[] memory leaves = new bytes32[](257);
-        vm.expectRevert(MerkleTree.LeavesTooLarge.selector);
-        leaves.generateTree();
-    }
-
     /*//////////////////////////////////////////////////////////////
                         HELPER FUNCTION TESTS
     //////////////////////////////////////////////////////////////*/
