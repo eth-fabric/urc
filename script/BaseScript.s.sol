@@ -107,17 +107,17 @@ contract BaseScript is Script {
         // Write to json outfile if specified otherwise default "output/SignedRegistrations.json"
         (string memory _jsonFile,) = _getDefaultJson(_outfile, "RegistrationProof.json");
 
-        // Write the registrationRoot to the json file
-        vm.writeJson(vm.toString(proof.registrationRoot), _jsonFile, ".registrationRoot");
-
-        // Write the abi-encoded SignedRegistration to the json file
-        vm.writeJson(vm.toString(abi.encode(proof.registration)), _jsonFile, ".registration");
+        // Write the leafIndex to the json file
+        vm.writeJson(vm.toString(proof.leafIndex), _jsonFile, ".leafIndex");
 
         // Write the abi-encoded merklProof bytes32[] to the json file
         vm.writeJson(vm.toString(abi.encode(proof.merkleProof)), _jsonFile, ".merkleProof");
 
-        // Write the leafIndex to the json file
-        vm.writeJson(vm.toString(proof.leafIndex), _jsonFile, ".leafIndex");
+        // Write the abi-encoded SignedRegistration to the json file
+        vm.writeJson(vm.toString(abi.encode(proof.registration)), _jsonFile, ".registration");
+
+        // Write the registrationRoot to the json file
+        vm.writeJson(vm.toString(proof.registrationRoot), _jsonFile, ".registrationRoot");
 
         console.log("RegistrationProof written to", _jsonFile);
     }

@@ -64,14 +64,23 @@ forge script script/Collateral.s.sol:CollateralScript --sig "claimSlashedCollate
 
 ## URC Slashing functions
 
-## URC Utility functions
+### Registering a bad registration (for testing)
+-THIS SCRIPT IS NOT MEANT FOR PRODUCTION- it is useful for testing the `slashRegistration` function. 
 
-### getConfig
-Retrieves the configuration of the URC and writes it to `script/output/{$CONFIG_FILE}` following the template file [`Config.json`](./output/Config.json).
+Running this script will generate and register an intentionally invalid BLS registration. The registration will be saved to `script/output/{$SIGNED_REGISTRATIONS_FILE}` following the template file [SignedRegistrations.json](./output/SignedRegistrations.json). 
 
 ```bash
-forge script script/Getters.s.sol:GettersScript --sig "getConfig(address,string)" $REGISTRY_ADDRESS $CONFIG_FILE --rpc-url $RPC_URL
+forge script script/Slashing.s.sol:SlashingScript --sig "registerBadRegistration(address,address,string)" $REGISTRY_ADDRESS $OWNER $SIGNED_REGISTRATIONS_FILE --account $FOUNDRY_WALLET --rpc-url $RPC_URL --broadcast
 ```
+
+### Slashing a registration
+Running this script will call `slashRegistration()` for the `RegistrationProof` located in `script/output/{$REGISTRATION_PROOF_FILE}` following the template file [RegistrationProof.json](./output/RegistrationProof.json).
+```bash
+forge script script/Slashing.s.sol:SlashingScript --sig "slashRegistration(address,string)" $REGISTRY_ADDRESS $REGISTRATION_PROOF_FILE --account $FOUNDRY_WALLET --rpc-url $RPC_URL --broadcast
+```
+
+
+## URC Utility functions
 
 ### getOperatorData
 Given a `$REGISTRATION_ROOT`, the script will write the `OperatorData` to `script/output/{$OPERATOR_DATA_FILE}` following the template file [`OperatorData.json`](./output/OperatorData.json).

@@ -75,7 +75,7 @@ contract RegisterScript is BaseScript {
     /// @dev NOT MEANT FOR PRODUCTION USE
     /// @dev Signs N registration messages and writes them to `outfile`
     /// @dev Derives N dummy BLS private keys from the `owner` address
-    // forge script script/Register.s.sol:RegisterScript --sig "nDummyRegistrations(uint256,address,string)" $N $OWNER $OUTFILE
+    // forge script script/Register.s.sol:RegisterScript --sig "nDummyRegistrations(uint256,address,string)" $N $OWNER $SIGNED_REGISTRATIONS_FILE
     function nDummyRegistrations(uint256 n, address owner, string memory outfile) public {
         console.log("Running nDummyRegistrations()... WARNING do not use the output in production!!!");
 
