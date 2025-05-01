@@ -47,7 +47,7 @@ struct RegistrationMessage {
     address withdrawalAddress; 
 
     /// The number of blocks that must elapse between deregistering and claiming
-    uint16 unregistrationDelay; 
+    uint24 unregistrationDelay; 
 }
 ```
 
@@ -122,12 +122,12 @@ The operator supplies at least `MIN_COLLATERAL` Ether to the contract and batch 
         address withdrawalAddress;
         /// ETH collateral in GWEI
         uint56 collateralGwei;
-        /// The block number when registration occurred
-        uint32 registeredAt;
-        /// The block number when deregistration occurred
-        uint32 unregisteredAt;
-        /// The number of blocks that must elapse between deregistering and claiming
-        uint16 unregistrationDelay;
+        /// The timestamp when registration occurred
+        uint48 registeredAt;
+        /// The timestamp when deregistration occurred
+        uint48 unregisteredAt;
+        /// The seconds that must elapse between deregistering and claiming
+        uint24 unregistrationDelay;
     }
 ```
 

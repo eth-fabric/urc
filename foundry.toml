@@ -19,6 +19,9 @@ tab_width = 4
 quote_style = "double"
 bracket_spacing = true
 
+[profile.solc]
+warnings = ["unused-local-variable", "unused-try-catch-parameter", "unused-function-parameter"]
+
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
 
 remappings = [

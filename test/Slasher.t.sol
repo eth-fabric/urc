@@ -63,7 +63,7 @@ contract SlashCommitmentTester is UnitTestHelper {
         bytes memory evidence = "";
 
         // skip past fraud proof window
-        vm.roll(block.timestamp + registry.getConfig().fraudProofWindow + 1);
+        vm.warp(block.timestamp + registry.getConfig().fraudProofWindow + 1);
 
         uint256 challengerBalanceBefore = challenger.balance;
         uint256 urcBalanceBefore = address(registry).balance;
@@ -88,7 +88,7 @@ contract SlashCommitmentTester is UnitTestHelper {
         IRegistry.OperatorData memory operatorData = registry.getOperatorData(result.registrationRoot);
 
         // Verify operator's slashedAt is set
-        assertEq(operatorData.slashedAt, block.number, "slashedAt not set");
+        assertEq(operatorData.slashedAt, block.timestamp, "slashedAt not set");
 
         // Verify operator's collateralGwei is decremented
         assertEq(operatorData.collateralWei, collateral - gotSlashAmountWei, "collateralGwei not decremented");
@@ -151,7 +151,7 @@ contract SlashCommitmentTester is UnitTestHelper {
             leafIndex: 0
         });
 
-        vm.roll(block.timestamp + registry.getConfig().fraudProofWindow + 1);
+        vm.warp(block.timestamp + registry.getConfig().fraudProofWindow + 1);
 
         vm.expectRevert(IRegistry.InvalidProof.selector);
         registry.slashCommitment(proof, result.signedDelegation, signedCommitment, "");
@@ -181,7 +181,7 @@ contract SlashCommitmentTester is UnitTestHelper {
 
         IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(result.registrations, operator, 0);
 
-        vm.roll(block.timestamp + registry.getConfig().fraudProofWindow + 1);
+        vm.warp(block.timestamp + registry.getConfig().fraudProofWindow + 1);
 
         vm.expectRevert(IRegistry.DelegationSignatureInvalid.selector);
         registry.slashCommitment(proof, badSignedDelegation, signedCommitment, "");
@@ -206,7 +206,7 @@ contract SlashCommitmentTester is UnitTestHelper {
 
         IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(result.registrations, operator, 0);
 
-        vm.roll(block.timestamp + registry.getConfig().fraudProofWindow + 1);
+        vm.warp(block.timestamp + registry.getConfig().fraudProofWindow + 1);
 
         vm.startPrank(challenger);
         vm.expectRevert(IRegistry.SlashAmountExceedsCollateral.selector);
@@ -235,7 +235,7 @@ contract SlashCommitmentTester is UnitTestHelper {
         bytes memory evidence = "";
 
         // skip past fraud proof window
-        vm.roll(block.timestamp + registry.getConfig().fraudProofWindow + 1);
+        vm.warp(block.timestamp + registry.getConfig().fraudProofWindow + 1);
 
         vm.startPrank(challenger);
         registry.slashCommitment(proof, result.signedDelegation, signedCommitment, evidence);
@@ -248,7 +248,7 @@ contract SlashCommitmentTester is UnitTestHelper {
         registry.claimSlashedCollateral(result.registrationRoot);
 
         // advance past the slash window
-        vm.roll(operatorData.slashedAt + registry.getConfig().slashWindow + 1);
+        vm.warp(operatorData.slashedAt + registry.getConfig().slashWindow + 1);
 
         // attempt to slash with same evidence
         vm.startPrank(challenger);
@@ -300,7 +300,7 @@ contract SlashCommitmentTester is UnitTestHelper {
         bytes memory evidence = "";
 
         // skip past fraud proof window
-        vm.roll(block.timestamp + registry.getConfig().fraudProofWindow + 1);
+        vm.warp(block.timestamp + registry.getConfig().fraudProofWindow + 1);
 
         vm.startPrank(challenger);
         vm.expectEmit(address(registry));
@@ -371,7 +371,7 @@ contract SlashCommitmentFromOptInTester is UnitTestHelper {
             basicCommitment(params.committerSecretKey, params.slasher, "");
 
         // skip past fraud proof window
-        vm.roll(block.timestamp + registry.getConfig().fraudProofWindow + 1);
+        vm.warp(block.timestamp + registry.getConfig().fraudProofWindow + 1);
 
         // opt in to the slasher
         vm.startPrank(operator);
@@ -401,7 +401,7 @@ contract SlashCommitmentFromOptInTester is UnitTestHelper {
         IRegistry.OperatorData memory operatorData = registry.getOperatorData(result.registrationRoot);
 
         // Verify operator's slashedAt is set
-        assertEq(operatorData.slashedAt, block.number, "slashedAt not set");
+        assertEq(operatorData.slashedAt, block.timestamp, "slashedAt not set");
 
         // Verify operator's collateralGwei is decremented
         assertEq(operatorData.collateralWei, collateral - gotSlashAmountWei, "collateralWei not decremented");
@@ -432,21 +432,21 @@ contract SlashCommitmentFromOptInTester is UnitTestHelper {
             basicCommitment(params.committerSecretKey, params.slasher, "");
 
         // skip past fraud proof window
-        vm.roll(block.number + registry.getConfig().fraudProofWindow + 1);
+        vm.warp(block.timestamp + registry.getConfig().fraudProofWindow + 1);
 
         // Opt in to slasher
         vm.startPrank(operator);
         registry.optInToSlasher(result.registrationRoot, address(dummySlasher), committer);
 
         // Wait for fraud proof window
-        vm.roll(block.number + registry.getConfig().fraudProofWindow + 1);
+        vm.warp(block.timestamp + registry.getConfig().fraudProofWindow + 1);
 
         // Unregister operator
         vm.startPrank(operator);
         registry.unregister(result.registrationRoot);
 
         // Wait for unregistration delay
-        vm.roll(block.number + registry.getConfig().unregistrationDelay + 1);
+        vm.warp(block.timestamp + registry.getConfig().unregistrationDelay + 1);
 
         // Try to slash after unregistration delay
         vm.startPrank(challenger);
@@ -473,21 +473,21 @@ contract SlashCommitmentFromOptInTester is UnitTestHelper {
             basicCommitment(params.committerSecretKey, params.slasher, "");
 
         // skip past fraud proof window
-        vm.roll(block.number + registry.getConfig().fraudProofWindow + 1);
+        vm.warp(block.timestamp + registry.getConfig().fraudProofWindow + 1);
 
         // Opt in to slasher
         vm.startPrank(operator);
         registry.optInToSlasher(result.registrationRoot, address(dummySlasher), committer);
 
         // Wait for fraud proof window
-        vm.roll(block.number + registry.getConfig().fraudProofWindow + 1);
+        vm.warp(block.timestamp + registry.getConfig().fraudProofWindow + 1);
 
         // First slash
         vm.startPrank(challenger);
         registry.slashCommitment(result.registrationRoot, signedCommitment, "");
 
         // Wait for slash window to expire
-        vm.roll(block.number + registry.getConfig().slashWindow + 1);
+        vm.warp(block.timestamp + registry.getConfig().slashWindow + 1);
 
         // Try to slash again after window expired
         signedCommitment = basicCommitment(params.committerSecretKey, params.slasher, "different payload");
@@ -514,7 +514,7 @@ contract SlashCommitmentFromOptInTester is UnitTestHelper {
             basicCommitment(params.committerSecretKey, params.slasher, "");
 
         // Wait for fraud proof window
-        vm.roll(block.number + registry.getConfig().fraudProofWindow + 1);
+        vm.warp(block.timestamp + registry.getConfig().fraudProofWindow + 1);
 
         // Try to slash without opting in
         vm.startPrank(challenger);
@@ -542,14 +542,14 @@ contract SlashCommitmentFromOptInTester is UnitTestHelper {
         ISlasher.SignedCommitment memory signedCommitment = basicCommitment(wrongCommitterKey, params.slasher, "");
 
         // skip past fraud proof window
-        vm.roll(block.number + registry.getConfig().fraudProofWindow + 1);
+        vm.warp(block.timestamp + registry.getConfig().fraudProofWindow + 1);
 
         // Opt in to slasher
         vm.startPrank(operator);
         registry.optInToSlasher(result.registrationRoot, address(dummySlasher), committer);
 
         // Wait for fraud proof window
-        vm.roll(block.number + registry.getConfig().fraudProofWindow + 1);
+        vm.warp(block.timestamp + registry.getConfig().fraudProofWindow + 1);
 
         // Try to slash with unauthorized commitment
         vm.startPrank(challenger);
@@ -576,14 +576,14 @@ contract SlashCommitmentFromOptInTester is UnitTestHelper {
             basicCommitment(params.committerSecretKey, params.slasher, "");
 
         // skip past fraud proof window
-        vm.roll(block.number + registry.getConfig().fraudProofWindow + 1);
+        vm.warp(block.timestamp + registry.getConfig().fraudProofWindow + 1);
 
         // Opt in to slasher
         vm.startPrank(operator);
         registry.optInToSlasher(result.registrationRoot, address(dummySlasher), committer);
 
         // Wait for fraud proof window
-        vm.roll(block.number + registry.getConfig().fraudProofWindow + 1);
+        vm.warp(block.timestamp + registry.getConfig().fraudProofWindow + 1);
 
         // Try to slash with amount exceeding collateral
         vm.startPrank(challenger);
@@ -627,7 +627,7 @@ contract SlashEquivocationTester is UnitTestHelper {
         IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(result.registrations, operator, 0);
 
         // skip past fraud proof window
-        vm.roll(block.timestamp + registry.getConfig().fraudProofWindow + 1);
+        vm.warp(block.timestamp + registry.getConfig().fraudProofWindow + 1);
 
         // Sign delegation
         ISlasher.Delegation memory delegationTwo = ISlasher.Delegation({
@@ -728,7 +728,7 @@ contract SlashEquivocationTester is UnitTestHelper {
 
         ISlasher.SignedDelegation memory signedDelegationTwo = signDelegation(params.proposerSecretKey, delegationTwo);
 
-        vm.roll(block.timestamp + registry.getConfig().fraudProofWindow + 1);
+        vm.warp(block.timestamp + registry.getConfig().fraudProofWindow + 1);
 
         vm.startPrank(challenger);
         vm.expectRevert(IRegistry.InvalidProof.selector);
@@ -752,7 +752,7 @@ contract SlashEquivocationTester is UnitTestHelper {
 
         IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(result.registrations, operator, 0);
 
-        vm.roll(block.timestamp + registry.getConfig().fraudProofWindow + 1);
+        vm.warp(block.timestamp + registry.getConfig().fraudProofWindow + 1);
 
         vm.startPrank(challenger);
         vm.expectRevert(IRegistry.DelegationsAreSame.selector);
@@ -791,7 +791,7 @@ contract SlashEquivocationTester is UnitTestHelper {
 
         ISlasher.SignedDelegation memory signedDelegationTwo = signDelegation(params.proposerSecretKey, delegationTwo);
 
-        vm.roll(block.timestamp + registry.getConfig().fraudProofWindow + 1);
+        vm.warp(block.timestamp + registry.getConfig().fraudProofWindow + 1);
 
         vm.startPrank(challenger);
         vm.expectRevert(IRegistry.DifferentSlots.selector);
@@ -826,7 +826,7 @@ contract SlashEquivocationTester is UnitTestHelper {
 
         ISlasher.SignedDelegation memory signedDelegationTwo = signDelegation(params.proposerSecretKey, delegationTwo);
 
-        vm.roll(block.timestamp + registry.getConfig().fraudProofWindow + 1);
+        vm.warp(block.timestamp + registry.getConfig().fraudProofWindow + 1);
 
         vm.startPrank(challenger);
         // First slash
@@ -870,14 +870,14 @@ contract SlashEquivocationTester is UnitTestHelper {
         ISlasher.SignedDelegation memory signedDelegationTwo = signDelegation(params.proposerSecretKey, delegationTwo);
 
         // move past the fraud proof window
-        vm.roll(block.number + registry.getConfig().fraudProofWindow + 1);
+        vm.warp(block.timestamp + registry.getConfig().fraudProofWindow + 1);
 
         // Unregister the operator
         vm.startPrank(operator);
         registry.unregister(result.registrationRoot);
 
         // Move past unregistration delay
-        vm.roll(block.number + registry.getConfig().unregistrationDelay + 1);
+        vm.warp(block.timestamp + registry.getConfig().unregistrationDelay + 1);
 
         vm.startPrank(challenger);
         vm.expectRevert(IRegistry.OperatorAlreadyUnregistered.selector);
@@ -926,7 +926,7 @@ contract SlashReentrantTester is UnitTestHelper {
             registry.getRegistrationProof(result.registrations, reentrantContractAddress, 0);
 
         // skip past fraud proof window
-        vm.roll(block.timestamp + registry.getConfig().fraudProofWindow + 1);
+        vm.warp(block.timestamp + registry.getConfig().fraudProofWindow + 1);
 
         uint256 challengerBalanceBefore = challenger.balance;
         uint80 operatorCollateralWeiBefore = registry.getOperatorData(result.registrationRoot).collateralWei;
@@ -972,7 +972,7 @@ contract SlashReentrantTester is UnitTestHelper {
         );
 
         // Verify operator's slashedAt is set
-        assertEq(operatorData.slashedAt, block.number, "slashedAt not set");
+        assertEq(operatorData.slashedAt, block.timestamp, "slashedAt not set");
 
         // Verify operator's equivocated is set
         assertEq(operatorData.equivocated, true, "operator not equivocated");
@@ -1033,7 +1033,7 @@ contract SlashConditionTester is UnitTestHelper {
         IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(result.registrations, operator, 0);
 
         // skip past fraud proof window
-        vm.roll(block.timestamp + registry.getConfig().fraudProofWindow + 1);
+        vm.warp(block.timestamp + registry.getConfig().fraudProofWindow + 1);
 
         // Slash the operator for equivocation
         vm.startPrank(challenger);
@@ -1042,7 +1042,7 @@ contract SlashConditionTester is UnitTestHelper {
 
         // Verify operator was slashed
         IRegistry.OperatorData memory operatorData = registry.getOperatorData(result.registrationRoot);
-        assertEq(operatorData.slashedAt, block.number, "operator not slashed");
+        assertEq(operatorData.slashedAt, block.timestamp, "operator not slashed");
 
         // Try to unregister after being slashed
         vm.startPrank(operator);
@@ -1081,7 +1081,7 @@ contract SlashConditionTester is UnitTestHelper {
         IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(result.registrations, operator, 0);
 
         // skip past fraud proof window
-        vm.roll(block.timestamp + registry.getConfig().fraudProofWindow + 1);
+        vm.warp(block.timestamp + registry.getConfig().fraudProofWindow + 1);
 
         // Start the normal unregistration path
         vm.startPrank(operator);
@@ -1094,11 +1094,11 @@ contract SlashConditionTester is UnitTestHelper {
 
         // Verify operator was slashed
         IRegistry.OperatorData memory operatorData = registry.getOperatorData(result.registrationRoot);
-        assertEq(operatorData.slashedAt, block.number, "operator not slashed");
+        assertEq(operatorData.slashedAt, block.timestamp, "operator not slashed");
         assertEq(operatorData.equivocated, true, "operator not equivocated");
 
         // Move past unregistration delay
-        vm.roll(block.number + registry.getConfig().unregistrationDelay + 1);
+        vm.warp(block.timestamp + registry.getConfig().unregistrationDelay + 1);
 
         // Try to claim collateral through normal path - should fail
         vm.expectRevert(IRegistry.SlashingAlreadyOccurred.selector);

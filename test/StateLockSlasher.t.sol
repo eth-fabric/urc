@@ -213,7 +213,7 @@ contract StateLockSlasherTest is UnitTestHelper, PreconfStructs {
         operatorData = registry.getOperatorData(result.registrationRoot);
 
         // Verify operator's slashedAt is set
-        assertEq(operatorData.slashedAt, block.number, "slashedAt not set");
+        assertEq(operatorData.slashedAt, block.timestamp, "slashedAt not set");
 
         // Verify operator's collateralGwei is decremented
         assertEq(operatorData.collateralWei, collateral - slashAmountWei, "collateralGwei not decremented");
