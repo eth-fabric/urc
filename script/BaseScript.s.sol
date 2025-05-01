@@ -95,6 +95,19 @@ contract BaseScript is Script {
         }
     }
 
+    /// @dev NOT MEANT FOR PRODUCTION USE
+    function _signTestCommitment(uint256 privateKey, address slasher, uint256 commitmentType, bytes memory payload)
+        internal
+        pure
+        returns (ISlasher.SignedCommitment memory signedCommitment)
+    {
+        ISlasher.Commitment memory commitment =
+            ISlasher.Commitment({ commitmentType: uint64(commitmentType), payload: payload, slasher: slasher });
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, keccak256(abi.encode(commitment)));
+        bytes memory signature = abi.encodePacked(r, s, v);
+        return ISlasher.SignedCommitment({ commitment: commitment, signature: signature });
+    }
+
     function _writeSignedRegistrations(
         address _owner,
         IRegistry.SignedRegistration[] memory _registrations,
@@ -214,6 +227,37 @@ contract BaseScript is Script {
         delegation.delegation.proposer = abi.decode(vm.parseJsonBytes(json, ".proposer"), (BLS.G1Point));
         delegation.signature = abi.decode(vm.parseJsonBytes(json, ".signature"), (BLS.G2Point));
         delegation.delegation.slot = uint64(vm.parseJsonUint(json, ".slot"));
+    }
+
+    function _writeCommitment(ISlasher.SignedCommitment memory commitment, string memory outfile) internal {
+        // Write to json outfile if specified otherwise default "output/Commitment.json"
+        (string memory jsonFile,) = _getDefaultJson(outfile, "Commitment.json");
+        vm.sleep(250);
+
+        vm.writeJson(vm.toString(commitment.commitment.commitmentType), jsonFile, ".commitmentType");
+        vm.sleep(250);
+
+        vm.writeJson(vm.toString(abi.encode(commitment.commitment.slasher)), jsonFile, ".slasher");
+        vm.sleep(250);
+
+        vm.writeJson(vm.toString(commitment.commitment.payload), jsonFile, ".payload");
+        vm.sleep(250);
+
+        vm.writeJson(vm.toString(commitment.signature), jsonFile, ".signature");
+
+        console.log("Commitment written to", jsonFile);
+    }
+
+    function _readCommitment(string memory infile) internal returns (ISlasher.SignedCommitment memory commitment) {
+        string memory jsonFile = string(abi.encodePacked("script/output/", infile));
+        string memory json = vm.readFile(jsonFile);
+
+        vm.sleep(500);
+
+        commitment.commitment.commitmentType = uint64(vm.parseJsonUint(json, ".commitmentType"));
+        commitment.commitment.payload = vm.parseJsonBytes(json, ".payload");
+        commitment.commitment.slasher = abi.decode(vm.parseJsonBytes(json, ".slasher"), (address));
+        commitment.signature = vm.parseJsonBytes(json, ".signature");
     }
 
     function _buildPubkeyStrings(IRegistry.SignedRegistration[] memory registrations)

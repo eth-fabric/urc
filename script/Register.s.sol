@@ -8,7 +8,10 @@ import "../src/lib/BLS.sol";
 
 contract RegisterScript is BaseScript {
     // forge script script/Register.s.sol:RegisterScript --sig "register(address,uint256,string)" $REGISTRY_ADDRESS $COLLATERAL $SIGNED_REGISTRATIONS_FILE --account $FOUNDRY_WALLET --rpc-url $RPC_URL --broadcast
-    function register(address _registry, uint256 collateralWei, string memory signedRegistrationsFile) external {
+    function register(address _registry, uint256 collateralWei, string memory signedRegistrationsFile)
+        external
+        returns (bytes32 registrationRoot)
+    {
         // Start broadcasting transactions
         vm.startBroadcast();
 
@@ -33,10 +36,9 @@ contract RegisterScript is BaseScript {
         IRegistry registry = IRegistry(_registry);
 
         // Call register
-        bytes32 registrationRoot = registry.register{ value: collateralWei }(registrations, owner);
+        registrationRoot = registry.register{ value: collateralWei }(registrations, owner);
 
-        console.log("Success! got registrationRoot:");
-        console.logBytes32(registrationRoot);
+        console.log("Success! got registrationRoot:", vm.toString(registrationRoot));
 
         vm.stopBroadcast();
     }

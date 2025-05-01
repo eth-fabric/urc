@@ -5,6 +5,9 @@ import "forge-std/Script.sol";
 import "../src/IRegistry.sol";
 import "./BaseScript.s.sol";
 import "../src/ISlasher.sol";
+import "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
+
+import { DummySlasher } from "../test/Slasher.t.sol";
 
 contract SlashingScript is BaseScript {
     // forge script script/Slashing.s.sol:SlashingScript --sig "registerBadRegistration(address,address,string)" $REGISTRY_ADDRESS $OWNER $SIGNED_REGISTRATIONS_FILE --account $FOUNDRY_WALLET --rpc-url $RPC_URL --broadcast
@@ -69,6 +72,7 @@ contract SlashingScript is BaseScript {
         string memory delegationTwoFile
     ) external {
         // For testing we assume the proposer private key is generated from their owner address
+        // uint256 proposerPrivateKey = uint256(keccak256(abi.encode(owner)));
         uint256 proposerPrivateKey = uint256(keccak256(abi.encode(owner)));
         // Generate two delegations with the same proposer and slot but different delegates
         ISlasher.SignedDelegation[] memory delegations = _nDelegations(2, proposerPrivateKey, 1, committer, slot);
@@ -109,6 +113,137 @@ contract SlashingScript is BaseScript {
         slashAmountWei = registry.slashEquivocation(proof, delegationOne, delegationTwo);
 
         console.log("Slashed collateral:", slashAmountWei);
+
+        vm.stopBroadcast();
+    }
+
+    // forge script script/Slashing.s.sol:SlashingScript --sig "slashCommitment(address,string,string,string,bytes)" $REGISTRY_ADDRESS $REGISTRATION_PROOF_FILE $DELEGATION_ONE_FILE $COMMITMENT_FILE $EVIDENCE --account $FOUNDRY_WALLET --rpc-url $RPC_URL --broadcast
+    function slashCommitment(
+        address _registry,
+        string memory registrationProofFile,
+        string memory delegationFile,
+        string memory commitmentFile,
+        bytes calldata evidence
+    ) external returns (uint256 slashAmountWei) {
+        // Start broadcasting transactions
+        vm.startBroadcast();
+
+        // Read the registration proof from file
+        IRegistry.RegistrationProof memory proof = _readRegistrationProof(registrationProofFile);
+
+        // Print for the user
+        console.log("Slashing user with registration root: ", vm.toString(proof.registrationRoot));
+        _prettyPrintPubKey(proof.registration);
+
+        // Read the commitment from file
+        ISlasher.SignedCommitment memory commitment = _readCommitment(commitmentFile);
+
+        // Read the delegation from file
+        ISlasher.SignedDelegation memory delegation = _readDelegation(delegationFile);
+
+        // Get reference to the registry
+        IRegistry registry = IRegistry(_registry);
+
+        // Call slashCommitment
+        slashAmountWei = registry.slashCommitment(proof, delegation, commitment, evidence);
+
+        console.log("Slashed collateral:", slashAmountWei);
+
+        vm.stopBroadcast();
+    }
+
+    // forge script script/Slashing.s.sol:SlashingScript --sig "slashCommitmentFromOptIn(address,bytes32,string,bytes)" $REGISTRY_ADDRESS $REGISTRATION_ROOT $COMMITMENT_FILE $EVIDENCE --account $FOUNDRY_WALLET --rpc-url $RPC_URL --broadcast
+    function slashCommitmentFromOptIn(
+        address _registry,
+        bytes32 registrationRoot,
+        string memory commitmentFile,
+        bytes calldata evidence
+    ) external returns (uint256 slashAmountWei) {
+        // Start broadcasting transactions
+        vm.startBroadcast();
+
+        // Print for the user
+        console.log("Registration root:", vm.toString(registrationRoot));
+
+        // Read the commitment from file
+        ISlasher.SignedCommitment memory commitment = _readCommitment(commitmentFile);
+
+        // Get reference to the registry
+        IRegistry registry = IRegistry(_registry);
+
+        // Call slashCommitment
+        slashAmountWei = registry.slashCommitment(registrationRoot, commitment, evidence);
+
+        console.log("Slashed collateral:", slashAmountWei);
+
+        vm.stopBroadcast();
+    }
+
+    /// @dev NOT MEANT FOR PRODUCTION USE
+    /// forge script script/Slashing.s.sol:SlashingScript --sig "prepareSlashing(address,address,bytes32,string,string,bytes)" $REGISTRY_ADDRESS $OWNER $REGISTRATION_ROOT $DELEGATION_ONE_FILE $COMMITMENT_FILE $EVIDENCE --account $FOUNDRY_WALLET --rpc-url $RPC_URL --broadcast
+    function prepareSlashing(
+        address _registry,
+        address owner,
+        bytes32 registrationRoot,
+        string memory delegationFile,
+        string memory commitmentFile,
+        bytes calldata evidence
+    ) external {
+        // Start broadcasting transactions
+        vm.startBroadcast();
+
+        // Deploy a dummy slasher contract
+        address dummySlasher = address(new DummySlasher());
+
+        // hardcoded committer
+        (address committer, uint256 committerPrivateKey) = makeAddrAndKey("committer");
+
+        // sign the delegation
+        uint256 proposerPrivateKey = uint256(keccak256(abi.encode(owner)));
+        ISlasher.SignedDelegation memory signedDelegation = _signTestDelegation(
+            proposerPrivateKey,
+            ISlasher.Delegation({
+                proposer: BLS.toPublicKey(proposerPrivateKey),
+                delegate: BLS.toPublicKey(0), // unused
+                committer: committer,
+                slot: 5,
+                metadata: ""
+            })
+        );
+
+        // sign the commitment
+        ISlasher.SignedCommitment memory signedCommitment =
+            _signTestCommitment(committerPrivateKey, dummySlasher, 0, "");
+
+        // sanity check verify signature as the URC would
+        address committerRecovered =
+            ECDSA.recover(keccak256(abi.encode(signedCommitment.commitment)), signedCommitment.signature);
+        if (committerRecovered != committer) {
+            revert("Recovered committer does not match");
+        }
+
+        // write the signed delegation to file
+        _writeDelegation(signedDelegation, delegationFile);
+        console.log("wrote delegation to file:", delegationFile);
+
+        // write signed commitment to file
+        _writeCommitment(signedCommitment, commitmentFile);
+        console.log("wrote commitment to file:", commitmentFile);
+
+        // sanity check read commitment from file
+        ISlasher.SignedCommitment memory s = _readCommitment(commitmentFile);
+        committerRecovered = ECDSA.recover(keccak256(abi.encode(s.commitment)), s.signature);
+        if (committerRecovered != committer) {
+            revert("Recovered committer does not match");
+        }
+
+        // Get reference to the registry
+        IRegistry registry = IRegistry(_registry);
+
+        // Call optInToSlasher
+        registry.optInToSlasher(registrationRoot, dummySlasher, committer);
+
+        console.log("Opted in to dummy slasher:", vm.toString(dummySlasher));
 
         vm.stopBroadcast();
     }
