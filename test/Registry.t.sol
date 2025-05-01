@@ -210,7 +210,7 @@ contract OptInAndOutTester is UnitTestHelper {
         address slasher = address(5678);
 
         // Wait for opt-in delay
-        vm.roll(block.number + registry.getConfig().fraudProofWindow);
+        vm.warp(block.timestamp + registry.getConfig().fraudProofWindow);
 
         vm.startPrank(operator);
         vm.expectEmit(address(registry));
@@ -218,7 +218,7 @@ contract OptInAndOutTester is UnitTestHelper {
         registry.optInToSlasher(registrationRoot, slasher, committer);
 
         // Wait for opt-in delay
-        vm.roll(block.number + registry.getConfig().optInDelay);
+        vm.warp(block.timestamp + registry.getConfig().optInDelay);
 
         vm.startPrank(operator);
         vm.expectEmit(address(registry));
@@ -235,7 +235,7 @@ contract OptInAndOutTester is UnitTestHelper {
         address committer = address(5678);
 
         // Wait for fraud proof window
-        vm.roll(block.number + registry.getConfig().fraudProofWindow);
+        vm.warp(block.timestamp + registry.getConfig().fraudProofWindow);
 
         // Try to opt in from wrong address
         vm.startPrank(thief);
@@ -252,7 +252,7 @@ contract OptInAndOutTester is UnitTestHelper {
         address committer = address(5678);
 
         // Wait for fraud proof window
-        vm.roll(block.number + registry.getConfig().fraudProofWindow);
+        vm.warp(block.timestamp + registry.getConfig().fraudProofWindow);
 
         // First opt-in
         vm.startPrank(operator);
@@ -272,7 +272,7 @@ contract OptInAndOutTester is UnitTestHelper {
         address committer = address(5678);
 
         // Wait for fraud proof window
-        vm.roll(block.number + registry.getConfig().fraudProofWindow);
+        vm.warp(block.timestamp + registry.getConfig().fraudProofWindow);
 
         // Opt in first
         vm.startPrank(operator);
@@ -293,14 +293,14 @@ contract OptInAndOutTester is UnitTestHelper {
         address committer = address(5678);
 
         // Wait for fraud proof window
-        vm.roll(block.number + registry.getConfig().fraudProofWindow);
+        vm.warp(block.timestamp + registry.getConfig().fraudProofWindow);
 
         // Opt in
         vm.startPrank(operator);
         registry.optInToSlasher(registrationRoot, slasher, committer);
 
         // Try to opt out before delay
-        vm.roll(block.number + registry.getConfig().optInDelay - 1);
+        vm.warp(block.timestamp + registry.getConfig().optInDelay - 1);
         vm.expectRevert(IRegistry.OptInDelayNotMet.selector);
         registry.optOutOfSlasher(registrationRoot, slasher);
     }
@@ -327,7 +327,7 @@ contract ClaimCollateralTester is UnitTestHelper {
         registry.unregister(registrationRoot);
 
         // Wait for unregistration delay
-        vm.roll(block.number + registry.getConfig().unregistrationDelay);
+        vm.warp(block.timestamp + registry.getConfig().unregistrationDelay);
 
         uint256 balanceBefore = operator.balance;
 
@@ -366,7 +366,7 @@ contract ClaimCollateralTester is UnitTestHelper {
         registry.unregister(registrationRoot);
 
         // Try to claim before delay has passed
-        vm.roll(block.number + registry.getConfig().unregistrationDelay - 1);
+        vm.warp(block.timestamp + registry.getConfig().unregistrationDelay - 1);
 
         vm.startPrank(operator);
         vm.expectRevert(IRegistry.UnregistrationDelayNotMet.selector);
@@ -383,7 +383,7 @@ contract ClaimCollateralTester is UnitTestHelper {
         vm.startPrank(operator);
         registry.unregister(registrationRoot);
 
-        vm.roll(block.number + registry.getConfig().unregistrationDelay);
+        vm.warp(block.timestamp + registry.getConfig().unregistrationDelay);
 
         vm.startPrank(operator);
         registry.claimCollateral(registrationRoot);
@@ -487,7 +487,7 @@ contract SlashRegistrationTester is UnitTestHelper {
         vm.startPrank(challenger);
         registry.slashRegistration(registry.getRegistrationProof(registrations, operator, 0));
 
-        vm.roll(block.number + registry.getConfig().slashWindow);
+        vm.warp(block.timestamp + registry.getConfig().slashWindow);
         vm.startPrank(operator);
         registry.claimSlashedCollateral(registrationRoot);
 
@@ -537,7 +537,7 @@ contract SlashRegistrationTester is UnitTestHelper {
         vm.startPrank(challenger);
         registry.slashRegistration(proof);
 
-        vm.roll(block.number + registry.getConfig().slashWindow);
+        vm.warp(block.timestamp + registry.getConfig().slashWindow);
         vm.startPrank(thief);
         registry.claimSlashedCollateral(registrationRoot);
 
@@ -582,7 +582,7 @@ contract SlashRegistrationTester is UnitTestHelper {
         vm.startPrank(challenger);
         registry.slashRegistration(proof);
 
-        vm.roll(block.number + registry.getConfig().slashWindow);
+        vm.warp(block.timestamp + registry.getConfig().slashWindow);
         vm.startPrank(thief);
         registry.claimSlashedCollateral(registrationRoot);
 
@@ -624,7 +624,7 @@ contract SlashRegistrationTester is UnitTestHelper {
         vm.startPrank(challenger);
         registry.slashRegistration(proof);
 
-        vm.roll(block.number + registry.getConfig().slashWindow);
+        vm.warp(block.timestamp + registry.getConfig().slashWindow);
         vm.startPrank(thief);
         registry.claimSlashedCollateral(registrationRoot);
 
@@ -670,7 +670,7 @@ contract RentrancyTester is UnitTestHelper {
         reentrantContract.unregister();
 
         // wait for unregistration delay
-        vm.roll(block.number + registry.getConfig().unregistrationDelay);
+        vm.warp(block.timestamp + registry.getConfig().unregistrationDelay);
 
         uint256 balanceBefore = address(reentrantContract).balance;
 

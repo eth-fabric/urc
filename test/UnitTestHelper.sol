@@ -60,9 +60,9 @@ contract UnitTestHelper is Test {
         IRegistry.OperatorData memory operatorData = registry.getOperatorData(registrationRoot);
         assertEq(operatorData.owner, expectedOwner, "Wrong withdrawal address");
         assertEq(operatorData.collateralWei, expectedCollateral, "Wrong collateral amount");
-        assertEq(operatorData.registeredAt, expectedRegisteredAt, "Wrong registration block");
-        assertEq(operatorData.unregisteredAt, expectedUnregisteredAt, "Wrong unregistration block");
-        assertEq(operatorData.slashedAt, expectedSlashedAt, "Wrong slashed block");
+        assertEq(operatorData.registeredAt, expectedRegisteredAt, "Wrong registration timestamp");
+        assertEq(operatorData.unregisteredAt, expectedUnregisteredAt, "Wrong unregistration timestamp");
+        assertEq(operatorData.slashedAt, expectedSlashedAt, "Wrong slashed timestamp");
     }
 
     function _setupSingleRegistration(uint256 secretKey, address owner)
@@ -113,7 +113,7 @@ contract UnitTestHelper is Test {
 
         registrationRoot = registry.register{ value: collateral }(registrations, owner);
 
-        _assertRegistration(registrationRoot, owner, uint80(collateral), uint48(block.number), type(uint48).max, 0);
+        _assertRegistration(registrationRoot, owner, uint80(collateral), uint48(block.timestamp), type(uint48).max, 0);
     }
 
     function basicCommitment(uint256 secretKey, address slasher, bytes memory payload)
