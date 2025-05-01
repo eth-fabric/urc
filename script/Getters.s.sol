@@ -97,7 +97,7 @@ contract GettersScript is BaseScript {
         bytes memory pubkey,
         string memory signedRegistrationsFile,
         string memory outfile
-    ) public returns (IRegistry.RegistrationProof memory proof) {
+    ) public returns (IRegistry.RegistrationProof memory) {
         require(pubkey.length == 48, "invalid pubkey length");
 
         // Read user's pre-signed registrations
@@ -108,7 +108,12 @@ contract GettersScript is BaseScript {
         uint256 leafIndex = type(uint256).max;
         bytes32 hashedPubKey = keccak256(pubkey);
         for (uint256 i = 0; i < registrations.length; i++) {
-            bytes memory compressed = abi.encode(BLS.compress(registrations[i].pubkey));
+            // Create a copy of the pubkey to prevent modification
+            BLS.G1Point memory pubkeyCopy = BLS.G1Point({
+                x: BLS.Fp({ a: registrations[i].pubkey.x.a, b: registrations[i].pubkey.x.b }),
+                y: BLS.Fp({ a: registrations[i].pubkey.y.a, b: registrations[i].pubkey.y.b })
+            });
+            bytes memory compressed = abi.encode(BLS.compress(pubkeyCopy));
             bytes memory pubkeyPretty = _prettyPubKey(compressed);
             if (hashedPubKey == keccak256(pubkeyPretty)) {
                 leafIndex = i;
@@ -123,14 +128,17 @@ contract GettersScript is BaseScript {
         // Get reference to the registry
         IRegistry registry = IRegistry(_registry);
 
-        // Call getRegistrationProof
-        proof = registry.getRegistrationProof(registrations, owner, leafIndex);
+        // Call URC.getRegistrationProof
+        IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(registrations, owner, leafIndex);
 
-        bytes32 writeProofHash = keccak256(abi.encode(proof));
+        // Check that the registration proof is valid
+        registry.verifyMerkleProof(proof);
+
+        console.log("Proof verified against URC");
+
+        // Write the proof to a file
         _writeRegistrationProof(proof, outfile);
 
-        bytes32 readProofHash = keccak256(abi.encode(_readRegistrationProof(outfile)));
-
-        require(writeProofHash == readProofHash, "Something went wrong!");
+        return proof;
     }
 }

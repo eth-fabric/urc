@@ -89,6 +89,6 @@ contract RegisterScript is BaseScript {
         _writeSignedRegistrations(owner, registrations, outfile);
 
         // Read them back to the User
-        _readSignedRegistrations(outfile);
+        // _readSignedRegistrations(outfile);
     }
 }

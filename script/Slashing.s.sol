@@ -4,7 +4,7 @@ pragma solidity >=0.8.0 <0.9.0;
 import "forge-std/Script.sol";
 import "../src/IRegistry.sol";
 import "./BaseScript.s.sol";
-import "../src/lib/BLS.sol";
+import "../src/ISlasher.sol";
 
 contract SlashingScript is BaseScript {
     // forge script script/Slashing.s.sol:SlashingScript --sig "registerBadRegistration(address,address,string)" $REGISTRY_ADDRESS $OWNER $SIGNED_REGISTRATIONS_FILE --account $FOUNDRY_WALLET --rpc-url $RPC_URL --broadcast
@@ -12,20 +12,14 @@ contract SlashingScript is BaseScript {
         external
         returns (bytes32 registrationRoot)
     {
-        // Generate an invalid BLS registration using a deterministic private key
-        uint256 privateKey = 12345;
-        IRegistry.SignedRegistration[] memory registrations = new IRegistry.SignedRegistration[](1);
-        // don't sign over the owner address
-        registrations[0] = _signTestRegistration(privateKey, address(1337));
-
-        // Write the invalid registration to file
-        _writeSignedRegistrations(owner, registrations, outfile);
-
-        // Log the bad compressed pubkey
-        console.log("Bad pubkey:", vm.toString(_prettyPubKey(abi.encode(BLS.compress(registrations[0].pubkey)))));
-
         // Start broadcasting transactions
         vm.startBroadcast();
+
+        // Generate an invalid BLS registration using a deterministic private key
+        uint256 privateKey = 12345;
+
+        // different owner address for invalid registration
+        IRegistry.SignedRegistration[] memory registrations = _nRegistrations(1, privateKey, address(1337));
 
         // Get reference to the registry
         IRegistry registry = IRegistry(_registry);
@@ -33,21 +27,27 @@ contract SlashingScript is BaseScript {
         // Use the minimum collateral amount
         uint256 collateralWei = registry.getConfig().minCollateralWei;
 
+        // Print for the user
+        _prettyPrintPubKey(registrations[0]);
+
         // Register the invalid registration
         registrationRoot = registry.register{ value: collateralWei }(registrations, owner);
 
         console.log("Registered bad registration with root:", vm.toString(registrationRoot));
+
+        // Write the invalid registration to file
+        _writeSignedRegistrations(owner, registrations, outfile);
 
         vm.stopBroadcast();
     }
 
     // forge script script/Slashing.s.sol:SlashingScript --sig "slashRegistration(address,string)" $REGISTRY_ADDRESS $REGISTRATION_PROOF_FILE --account $FOUNDRY_WALLET --rpc-url $RPC_URL --broadcast
     function slashRegistration(address _registry, string memory registrationProofFile) external {
-        // Start broadcasting transactions
-        vm.startBroadcast();
-
         // Read the registration proof from file
         IRegistry.RegistrationProof memory proof = _readRegistrationProof(registrationProofFile);
+
+        // Start broadcasting transactions
+        vm.startBroadcast();
 
         // Get reference to the registry
         IRegistry registry = IRegistry(_registry);
@@ -56,6 +56,59 @@ contract SlashingScript is BaseScript {
         uint256 slashedCollateralWei = registry.slashRegistration(proof);
 
         console.log("Slashed collateral:", slashedCollateralWei);
+
+        vm.stopBroadcast();
+    }
+
+    // forge script script/Slashing.s.sol:SlashingScript --sig "generateEquivocatingDelegations(address,address,uint256,string,string)" $OWNER $COMMITTER $SLOT $DELEGATION_ONE_FILE $DELEGATION_TWO_FILE
+    function generateEquivocatingDelegations(
+        address owner,
+        address committer,
+        uint256 slot,
+        string memory delegationOneFile,
+        string memory delegationTwoFile
+    ) external {
+        // For testing we assume the proposer private key is generated from their owner address
+        uint256 proposerPrivateKey = uint256(keccak256(abi.encode(owner)));
+        // Generate two delegations with the same proposer and slot but different delegates
+        ISlasher.SignedDelegation[] memory delegations = _nDelegations(2, proposerPrivateKey, 1, committer, slot);
+
+        // Write the delegations to files
+        _writeDelegation(delegations[0], delegationOneFile);
+        _writeDelegation(delegations[1], delegationTwoFile);
+
+        console.log("Equivocating delegations written to files");
+        console.log("Delegation one file:", delegationOneFile);
+        console.log("Delegation two file:", delegationTwoFile);
+    }
+
+    // forge script script/Slashing.s.sol:SlashingScript --sig "slashEquivocation(address,string,string,string)" $REGISTRY_ADDRESS $REGISTRATION_PROOF_FILE $DELEGATION_ONE_FILE $DELEGATION_TWO_FILE --account $FOUNDRY_WALLET --rpc-url $RPC_URL --broadcast
+    function slashEquivocation(
+        address _registry,
+        string memory registrationProofFile,
+        string memory delegationOneFile,
+        string memory delegationTwoFile
+    ) external returns (uint256 slashAmountWei) {
+        // Start broadcasting transactions
+        vm.startBroadcast();
+
+        // Read the registration proof from file
+        IRegistry.RegistrationProof memory proof = _readRegistrationProof(registrationProofFile);
+
+        // Read the delegations from files
+        ISlasher.SignedDelegation memory delegationOne = _readDelegation(delegationOneFile);
+        ISlasher.SignedDelegation memory delegationTwo = _readDelegation(delegationTwoFile);
+
+        // Print for the user
+        _prettyPrintPubKey(proof.registration);
+
+        // Get reference to the registry
+        IRegistry registry = IRegistry(_registry);
+
+        // Call slashEquivocation
+        slashAmountWei = registry.slashEquivocation(proof, delegationOne, delegationTwo);
+
+        console.log("Slashed collateral:", slashAmountWei);
 
         vm.stopBroadcast();
     }

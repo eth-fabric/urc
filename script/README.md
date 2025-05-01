@@ -79,6 +79,23 @@ Running this script will call `slashRegistration()` for the `RegistrationProof` 
 forge script script/Slashing.s.sol:SlashingScript --sig "slashRegistration(address,string)" $REGISTRY_ADDRESS $REGISTRATION_PROOF_FILE --account $FOUNDRY_WALLET --rpc-url $RPC_URL --broadcast
 ```
 
+### Generating equivocating delegations (for testing)
+-THIS SCRIPT IS NOT MEANT FOR PRODUCTION- it is useful for testing the `slashEquivocation` function.
+
+Running this script will generate two `SignedDelegation` messages with the same proposer and slot but different delegates. The delegations will be saved to `script/output/{$DELEGATION_ONE_FILE}` and `script/output/{$DELEGATION_TWO_FILE}` following the template file [Delegation.json](./output/Delegation.json).
+
+```bash
+forge script script/Slashing.s.sol:SlashingScript --sig "generateEquivocatingDelegations(address,address,uint256,string,string)" $OWNER $COMMITTER $SLOT $DELEGATION_ONE_FILE $DELEGATION_TWO_FILE
+```
+
+### Slashing for equivocation
+Running this script will call `slashEquivocation()` using:
+- The `RegistrationProof` located in `script/output/{$REGISTRATION_PROOF_FILE}`
+- Two equivocating delegations located in `script/output/{$DELEGATION_ONE_FILE}` and `script/output/{$DELEGATION_TWO_FILE}`
+
+```bash
+forge script script/Slashing.s.sol:SlashingScript --sig "slashEquivocation(address,string,string,string)" $REGISTRY_ADDRESS $REGISTRATION_PROOF_FILE $DELEGATION_ONE_FILE $DELEGATION_TWO_FILE --account $FOUNDRY_WALLET --rpc-url $RPC_URL --broadcast
+```
 
 ## URC Utility functions
 
