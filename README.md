@@ -28,6 +28,8 @@ forge build
 forge test
 ```
 
+To run the scripts, check out the [readme](./script/README.md)
+
 ### Design
 See the [docs](./docs/overview.md) for more information.
 

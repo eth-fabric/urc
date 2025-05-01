@@ -1,0 +1,7 @@
+{
+    "minCollateralWei": "1000000000000000000",
+    "fraudProofWindow": 7200,
+    "unregistrationDelay": 7200,
+    "slashWindow": 7200,
+    "optInDelay": 7200
+} 

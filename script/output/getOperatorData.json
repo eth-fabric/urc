@@ -1,0 +1,10 @@
+{
+  "owner": "0x0000000000000000000000000000000000000000",
+  "collateralWei": 0,
+  "numKeys": 0,
+  "registeredAt": 0,
+  "unregisteredAt": 0,
+  "slashedAt": 0,
+  "deleted": false,
+  "equivocated": false
+}
