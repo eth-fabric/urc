@@ -144,7 +144,7 @@ contract Registry is IRegistry {
             revert AlreadyOptedIn();
         }
 
-        // Fix: If previously opted out, enforce delay before allowing new opt-in
+        // If previously opted out, enforce delay before allowing new opt-in
         if (slasherCommitment.optedOutAt != 0 && block.timestamp < slasherCommitment.optedOutAt + config.optInDelay) {
             revert OptInDelayNotMet();
         }
@@ -334,9 +334,15 @@ contract Registry is IRegistry {
         // Recover the SlasherCommitment entry
         SlasherCommitment storage slasherCommitment = operator.slasherCommitments[commitment.commitment.slasher];
 
-        // Verify the operator is opted into protocol
-        if (slasherCommitment.optedInAt <= slasherCommitment.optedOutAt) {
+        // Verify the operator has opted-in in the past
+        if (slasherCommitment.optedInAt == 0) {
             revert NotOptedIn();
+        }
+
+        // Prevent slashing if they've opted out and the slash window has passed
+        // The slashWindow is to enforce a malicious operator can be slashed immediately after opting out
+        if (slasherCommitment.optedOutAt > 0 && block.timestamp >= slasherCommitment.optedOutAt + config.slashWindow) {
+            revert SlashWindowExpired();
         }
 
         // Verify the commitment was signed by the registered committer from the optInToSlasher() function

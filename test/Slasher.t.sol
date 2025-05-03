@@ -590,6 +590,117 @@ contract SlashCommitmentFromOptInTester is UnitTestHelper {
         vm.expectRevert(IRegistry.SlashAmountExceedsCollateral.selector);
         registry.slashCommitment(result.registrationRoot, signedCommitment, "");
     }
+
+    function testSlashableAfterOptingOut() public {
+        RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
+            proposerSecretKey: SECRET_KEY_1,
+            collateral: collateral,
+            owner: operator,
+            delegateSecretKey: SECRET_KEY_2,
+            committerSecretKey: committerSecretKey,
+            committer: committer,
+            slasher: address(dummySlasher),
+            metadata: "",
+            slot: 0
+        });
+
+        RegisterAndDelegateResult memory result = registerAndDelegate(params);
+
+        ISlasher.SignedCommitment memory signedCommitment =
+            basicCommitment(params.committerSecretKey, params.slasher, "");
+
+        // skip past fraud proof window
+        vm.warp(block.timestamp + registry.getConfig().fraudProofWindow + 1);
+
+        // opt in to the slasher
+        vm.startPrank(operator);
+        registry.optInToSlasher(result.registrationRoot, address(dummySlasher), committer);
+
+        // skip past opt-in delay
+        vm.warp(block.timestamp + registry.getConfig().optInDelay + 1);
+
+        // opt out of the slasher
+        vm.startPrank(operator);
+        registry.optOutOfSlasher(result.registrationRoot, address(dummySlasher));
+
+        // don't wait for slash window to pass
+
+        uint256 challengerBalanceBefore = challenger.balance;
+        uint256 urcBalanceBefore = address(registry).balance;
+
+        // slash
+        vm.startPrank(challenger);
+        vm.expectEmit(address(registry));
+        emit IRegistry.OperatorSlashed(
+            IRegistry.SlashingType.Commitment,
+            result.registrationRoot,
+            operator,
+            challenger,
+            address(dummySlasher),
+            dummySlasher.SLASH_AMOUNT_WEI()
+        );
+
+        uint256 gotSlashAmountWei = registry.slashCommitment(result.registrationRoot, signedCommitment, "");
+
+        assertEq(dummySlasher.SLASH_AMOUNT_WEI(), gotSlashAmountWei, "Slash amount incorrect");
+
+        _verifySlashCommitmentBalances(challenger, gotSlashAmountWei, 0, challengerBalanceBefore, urcBalanceBefore);
+
+        IRegistry.OperatorData memory operatorData = registry.getOperatorData(result.registrationRoot);
+
+        // Verify operator's slashedAt is set
+        assertEq(operatorData.slashedAt, block.timestamp, "slashedAt not set");
+
+        // Verify operator's collateralGwei is decremented
+        assertEq(operatorData.collateralWei, collateral - gotSlashAmountWei, "collateralWei not decremented");
+
+        // Verify the SlasherCommitment was set to slashed
+        IRegistry.SlasherCommitment memory slasherCommitment =
+            registry.getSlasherCommitment(result.registrationRoot, address(dummySlasher));
+
+        assertEq(slasherCommitment.slashed, true, "SlasherCommitment not slashed");
+    }
+
+    function testNotSlashableAfterOptingOutIfSlashWindowPassed() public {
+        RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
+            proposerSecretKey: SECRET_KEY_1,
+            collateral: collateral,
+            owner: operator,
+            delegateSecretKey: SECRET_KEY_2,
+            committerSecretKey: committerSecretKey,
+            committer: committer,
+            slasher: address(dummySlasher),
+            metadata: "",
+            slot: 0
+        });
+
+        RegisterAndDelegateResult memory result = registerAndDelegate(params);
+
+        ISlasher.SignedCommitment memory signedCommitment =
+            basicCommitment(params.committerSecretKey, params.slasher, "");
+
+        // skip past fraud proof window
+        vm.warp(block.timestamp + registry.getConfig().fraudProofWindow + 1);
+
+        // opt in to the slasher
+        vm.startPrank(operator);
+        registry.optInToSlasher(result.registrationRoot, address(dummySlasher), committer);
+
+        // skip past opt-in delay
+        vm.warp(block.timestamp + registry.getConfig().optInDelay + 1);
+
+        // opt out of the slasher
+        vm.startPrank(operator);
+        registry.optOutOfSlasher(result.registrationRoot, address(dummySlasher));
+
+        // wait for slash window to pass
+        vm.warp(block.timestamp + registry.getConfig().slashWindow + 1);
+
+        // try to slash
+        vm.startPrank(challenger);
+        vm.expectRevert(IRegistry.SlashWindowExpired.selector);
+        registry.slashCommitment(result.registrationRoot, signedCommitment, "");
+    }
 }
 
 contract SlashEquivocationTester is UnitTestHelper {
