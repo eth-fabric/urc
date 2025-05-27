@@ -215,6 +215,8 @@ interface IRegistry {
     /// @dev - They sent less than `config.minCollateralWei` (InsufficientCollateral)
     /// @dev - The operator has already registered the same `registrations` (OperatorAlreadyRegistered)
     /// @dev - The registration root is invalid (InvalidRegistrationRoot)
+    /// @dev - The collateral amount overflows the `collateralWei` field (CollateralOverflow)
+    /// @dev - The owner address is 0 (InvalidOwnerAddress)
     /// @param registrations The BLS keys to register
     /// @param owner The authorized address to perform actions on behalf of the operator
     /// @return registrationRoot The merkle root of the registration
@@ -261,6 +263,7 @@ interface IRegistry {
     /// @dev A successful challenge will transfer `config.minCollateralWei / 2` to the challenger, burn `config.minCollateralWei / 2`, and then allow the operator to claim their remaining collateral after `config.slashWindow` blocks have elapsed from the `claimSlashedCollateral()` function.
     /// @dev The function will revert if:
     /// @dev - The operator has already been deleted (OperatorDeleted)
+    /// @dev - The operator has already been slashed with the same proof (SlashingAlreadyOccurred)
     /// @dev - The fraud proof window has expired (FraudProofWindowExpired)
     /// @dev - The operator has no collateral (NoCollateral)
     /// @dev - The operator's collateral is less than the minimum collateral (CollateralBelowMinimum)

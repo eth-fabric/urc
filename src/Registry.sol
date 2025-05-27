@@ -44,6 +44,9 @@ contract Registry is IRegistry {
         // At least minCollateralWei required to sufficiently reward fraud/equivocation challenges
         if (msg.value < config.minCollateralWei) revert InsufficientCollateral();
 
+        // Prevent overflow of collateral
+        if (msg.value > type(uint80).max) revert CollateralOverflow();
+
         // Prevent 0 address as owner
         if (owner == address(0)) revert InvalidOwnerAddress();
 
