@@ -256,7 +256,8 @@ contract Registry is IRegistry {
         bytes calldata evidence
     ) external isSlashableCommitment(proof.registrationRoot) returns (uint256 slashAmountWei) {
         // Calculate a unique identifier for the slashing evidence
-        bytes32 slashingDigest = keccak256(abi.encode(delegation, commitment, proof.registrationRoot));
+        bytes32 slashingDigest =
+            keccak256(abi.encode(delegation, commitment, keccak256(evidence), proof.registrationRoot));
 
         // Prevent slashing with same inputs
         if (slashedBefore[slashingDigest]) revert SlashingAlreadyOccurred();
@@ -626,6 +627,9 @@ contract Registry is IRegistry {
         if (operator.data.slashedAt == 0) {
             operator.data.slashedAt = uint48(block.timestamp);
         }
+
+        // Prevent slashing if the slashing amount is 0
+        if (slashAmountWei == 0) revert NoCollateralSlashed();
 
         // Prevent slashing more than the operator's collateral
         if (slashAmountWei > operator.data.collateralWei) revert SlashAmountExceedsCollateral();
