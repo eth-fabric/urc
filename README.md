@@ -58,3 +58,6 @@ See the [examples](./example/README.md) for reference implementations of Slasher
 
 ### License
 MIT + Apache-2.0
+
+### Disclaimer
+This project is not audited and is not ready for production use. Please see Terms of Use (https://github.com/Commit-Boost/commit-boost-client/blob/main/TERMS-OF-USE.md) for more details.
