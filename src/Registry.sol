@@ -201,6 +201,15 @@ contract Registry is IRegistry {
         // Prevent reusing a deleted operator
         if (operator.data.deleted) revert OperatorDeleted();
 
+        // Calculate a unique identifier for the slashing evidence
+        bytes32 slashingDigest = keccak256(abi.encode(proof));
+
+        // Prevent slashing with same inputs
+        if (slashedBefore[slashingDigest]) revert SlashingAlreadyOccurred();
+
+        // Save the slashing digest
+        slashedBefore[slashingDigest] = true;
+
         // Can only slash registrations within the fraud proof window
         if (block.timestamp > operator.data.registeredAt + config.fraudProofWindow) {
             revert FraudProofWindowExpired();
