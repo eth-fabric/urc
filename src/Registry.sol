@@ -248,6 +248,11 @@ contract Registry is IRegistry {
         // Burn half of the MIN_COLLATERAL amount and reward the challenger the other half
         _rewardAndBurn(config.minCollateralWei / 2, msg.sender);
 
+        // Push collateral changes
+        operator.collateralHistory.push(
+            CollateralRecord({ timestamp: uint64(block.timestamp), collateralValue: operator.data.collateralWei })
+        );
+
         emit OperatorSlashed(
             SlashingType.Fraud,
             proof.registrationRoot,
@@ -400,6 +405,11 @@ contract Registry is IRegistry {
 
         // Decrement operator's collateral
         operator.data.collateralWei -= uint80(config.minCollateralWei);
+
+        // Push collateral changes
+        operator.collateralHistory.push(
+            CollateralRecord({ timestamp: uint64(block.timestamp), collateralValue: operator.data.collateralWei })
+        );
 
         // Burn half of the MIN_COLLATERAL amount and reward the challenger the other half
         _rewardAndBurn(config.minCollateralWei / 2, msg.sender);
@@ -648,6 +658,11 @@ contract Registry is IRegistry {
 
         // Decrement operator's collateral
         operator.data.collateralWei -= uint80(slashAmountWei);
+
+        // Push collateral changes
+        operator.collateralHistory.push(
+            CollateralRecord({ timestamp: uint64(block.timestamp), collateralValue: operator.data.collateralWei })
+        );
 
         // Burn the slashed amount
         _burnETH(slashAmountWei);
