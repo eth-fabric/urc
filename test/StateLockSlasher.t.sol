@@ -220,7 +220,7 @@ contract StateLockSlasherTest is UnitTestHelper, PreconfStructs {
 
         // Verify the slashedBefore mapping is set
         bytes32 slashingDigest =
-            keccak256(abi.encode(result.signedDelegation, signedCommitment, result.registrationRoot));
+            keccak256(abi.encode(result.signedDelegation, signedCommitment, keccak256(evidence), result.registrationRoot));
         assertEq(registry.slashingEvidenceAlreadyUsed(slashingDigest), true, "slashedBefore not set");
     }
 

@@ -232,9 +232,11 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
         // Merkle proof for URC registration
         IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(result.registrations, operator, 0);
 
+        bytes memory evidence = abi.encode(inclusionProof);
+
         // Slash via URC
         vm.prank(challenger);
-        registry.slashCommitment(proof, result.signedDelegation, signedCommitment, abi.encode(inclusionProof));
+        registry.slashCommitment(proof, result.signedDelegation, signedCommitment, evidence);
 
         _verifySlashCommitmentBalances(challenger, slashAmountWei, 0, challengerBalanceBefore, urcBalanceBefore);
 
@@ -249,7 +251,7 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
 
         // Verify the slashedBefore mapping is set
         bytes32 slashingDigest =
-            keccak256(abi.encode(result.signedDelegation, signedCommitment, result.registrationRoot));
+            keccak256(abi.encode(result.signedDelegation, signedCommitment, keccak256(evidence), result.registrationRoot));
         assertEq(registry.slashingEvidenceAlreadyUsed(slashingDigest), true, "slashedBefore not set");
     }
 
