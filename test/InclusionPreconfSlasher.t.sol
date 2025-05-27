@@ -250,8 +250,9 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
         assertEq(operatorData.collateralWei, collateral - slashAmountWei, "collateralWei not decremented");
 
         // Verify the slashedBefore mapping is set
-        bytes32 slashingDigest =
-            keccak256(abi.encode(result.signedDelegation, signedCommitment, keccak256(evidence), result.registrationRoot));
+        bytes32 slashingDigest = keccak256(
+            abi.encode(result.signedDelegation, signedCommitment, keccak256(evidence), result.registrationRoot)
+        );
         assertEq(registry.slashingEvidenceAlreadyUsed(slashingDigest), true, "slashedBefore not set");
     }
 
