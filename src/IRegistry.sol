@@ -163,6 +163,7 @@ interface IRegistry {
      *
      */
     error InsufficientCollateral();
+    error InvalidOwnerAddress();
     error OperatorAlreadyRegistered();
     error OperatorDeleted();
     error InvalidRegistrationRoot();
