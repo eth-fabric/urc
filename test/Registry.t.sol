@@ -641,6 +641,31 @@ contract SlashRegistrationTester is UnitTestHelper {
 
         assertEq(registry.getOperatorData(registrationRoot).deleted, true, "operator was not deleted");
     }
+
+    function test_slashRegistration_SlashingAlreadyOccurred() public {
+        uint256 collateral = 2 * registry.getConfig().minCollateralWei;
+
+        IRegistry.SignedRegistration[] memory registrations = new IRegistry.SignedRegistration[](1);
+
+        BLS.G1Point memory pubkey = BLS.toPublicKey(SECRET_KEY_1);
+
+        // Use a different secret key to sign the registration
+        BLS.G2Point memory signature = _registrationSignature(SECRET_KEY_2, operator);
+
+        registrations[0] = IRegistry.SignedRegistration({ pubkey: pubkey, signature: signature });
+
+        registry.register{ value: collateral }(registrations, operator);
+
+        // Get the proof
+        IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(registrations, operator, 0);
+
+        vm.startPrank(challenger);
+        registry.slashRegistration(proof);
+
+        // Try to slash again with same proof
+        vm.expectRevert(IRegistry.SlashingAlreadyOccurred.selector);
+        registry.slashRegistration(proof);
+    }
 }
 
 contract RentrancyTester is UnitTestHelper {
