@@ -48,6 +48,8 @@ interface ISlasher {
     /// @dev The URC will call this function to slash a registered operator if supplied with valid evidence
     /// @dev Note that the `delegation` may be optional in cases where the slashing is due
     /// @dev to a commitment that is not associated with an off-chain delegation
+    /// @dev Note when implementing this function, if the `evidence` is unused, the contract should assert it is empty to prevent replaying slashings on the URC.
+    /// @dev Note when implementing this function, the contract should not allow permutations of the `evidence` to result in the same slashing result to prevent replaying slashings on the URC.
     /// @param delegation The delegation message
     /// @param commitment The commitment message
     /// @param committer The address of the committer
