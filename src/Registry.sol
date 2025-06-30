@@ -648,7 +648,7 @@ contract Registry is IRegistry {
         proof.registrationRoot = _merkleizeSignedRegistrationsWithOwner(regs, owner);
         proof.registration = regs[leafIndex];
 
-        bytes32[] memory leaves = _hashToLeaves(regs, owner);
+        bytes32[] memory leaves = MerkleTree.hashToLeaves(regs, owner);
         proof.merkleProof = MerkleTree.generateProof(leaves, leafIndex);
     }
 
@@ -696,23 +696,6 @@ contract Registry is IRegistry {
             SlashingType.Commitment, registrationRoot, operator.data.owner, msg.sender, slasher, slashAmountWei
         );
     }
-    /// @notice Hashes an array of `SignedRegistration` structs with the owner address
-    /// @dev Leaves are created by abi-encoding the `SignedRegistration` structs with the owner address, then hashing with keccak256.
-    /// @param regs The array of `SignedRegistration` structs to hash
-    /// @param owner The owner address of the operator
-    /// @return leaves The array of hashed leaves
-
-    function _hashToLeaves(SignedRegistration[] calldata regs, address owner)
-        internal
-        pure
-        returns (bytes32[] memory leaves)
-    {
-        // Create leaf nodes by hashing SignedRegistration structs
-        leaves = new bytes32[](regs.length);
-        for (uint256 i = 0; i < regs.length; i++) {
-            leaves[i] = keccak256(abi.encode(regs[i], owner));
-        }
-    }
 
     /// @notice Merkleizes an array of `SignedRegistration` structs
     /// @dev Leaves are created by abi-encoding the `SignedRegistration` structs with the owner address, then hashing with keccak256.
@@ -724,7 +707,7 @@ contract Registry is IRegistry {
         returns (bytes32 registrationRoot)
     {
         // Create leaves array with padding
-        bytes32[] memory leaves = _hashToLeaves(regs, owner);
+        bytes32[] memory leaves = MerkleTree.hashToLeaves(regs, owner);
 
         // Merkleize the leaves
         registrationRoot = MerkleTree.generateTree(leaves);
