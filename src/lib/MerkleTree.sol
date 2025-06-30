@@ -4,6 +4,7 @@ pragma solidity >=0.8.0 <0.9.0;
 import "@openzeppelin/contracts/utils/math/Math.sol";
 import { MerkleTreeLib } from "solady/utils/MerkleTreeLib.sol";
 import { MerkleProofLib } from "solady/utils/MerkleProofLib.sol";
+import { IRegistry } from "../IRegistry.sol";
 
 /**
  * @title MerkleTree
@@ -39,16 +40,10 @@ library MerkleTree {
      * @dev Verifies a Merkle proof for a leaf
      * @param root Root hash of the Merkle tree
      * @param leaf Leaf value being proved
-     * @param index Index of the leaf in the tree
      * @param proof Array of proof elements
      * @return bool True if the proof is valid, false otherwise
      */
-    function verifyProof(
-        bytes32 root,
-        bytes32 leaf,
-        uint256 index, // todo remove
-        bytes32[] memory proof
-    ) internal pure returns (bool) {
+    function verifyProof(bytes32 root, bytes32 leaf, bytes32[] memory proof) internal pure returns (bool) {
         return MerkleProofLib.verify(proof, root, leaf);
     }
 
@@ -56,16 +51,10 @@ library MerkleTree {
      * @dev Verifies a Merkle proof for a leaf
      * @param root Root hash of the Merkle tree
      * @param leaf Leaf value being proved
-     * @param index Index of the leaf in the tree
      * @param proof Array of proof elements
      * @return bool True if the proof is valid, false otherwise
      */
-    function verifyProofCalldata(
-        bytes32 root,
-        bytes32 leaf,
-        uint256 index, // todo remove
-        bytes32[] calldata proof
-    ) internal pure returns (bool) {
+    function verifyProofCalldata(bytes32 root, bytes32 leaf, bytes32[] calldata proof) internal pure returns (bool) {
         return MerkleProofLib.verifyCalldata(proof, root, leaf);
     }
 }

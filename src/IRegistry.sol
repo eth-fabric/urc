@@ -97,8 +97,6 @@ interface IRegistry {
         SignedRegistration registration;
         /// The merkle proof to verify the operator's key is in the registry
         bytes32[] merkleProof;
-        /// The index of the leaf in the merkle tree
-        uint256 leafIndex;
     }
 
     /**

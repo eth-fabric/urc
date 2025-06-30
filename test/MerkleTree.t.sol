@@ -35,7 +35,7 @@ contract MerkleTreeTest is Test {
         for (uint256 i = 0; i < size; i++) {
             bytes32[] memory proof = largeTree.generateProof(i);
             assertTrue(
-                MerkleTree.verifyProof(root, largeTree[i], i, proof),
+                MerkleTree.verifyProof(root, largeTree[i], proof),
                 string.concat("Large tree verification failed at index ", vm.toString(i))
             );
         }
@@ -56,7 +56,7 @@ contract MerkleTreeTest is Test {
         // Test proofs
         for (uint256 i = 0; i < size; i++) {
             bytes32[] memory proof = randomLeaves.generateProof(i);
-            assertTrue(MerkleTree.verifyProof(root, randomLeaves[i], i, proof), "Random leaf verification failed");
+            assertTrue(MerkleTree.verifyProof(root, randomLeaves[i], proof), "Random leaf verification failed");
         }
     }
 
@@ -87,7 +87,7 @@ contract MerkleTreeTest is Test {
             for (uint256 k = 0; k < indicesToCheck.length; k++) {
                 bytes32[] memory proof = leaves.generateProof(indicesToCheck[k]);
                 assertTrue(
-                    MerkleTree.verifyProof(root, leaves[indicesToCheck[k]], indicesToCheck[k], proof),
+                    MerkleTree.verifyProof(root, leaves[indicesToCheck[k]], proof),
                     string.concat(
                         "Boundary tree size ",
                         vm.toString(sizes[i]),
@@ -119,7 +119,7 @@ contract MerkleTreeTest is Test {
             for (uint256 j = 0; j < 4; j++) {
                 bytes32[] memory proof = leaves.generateProof(j);
                 assertTrue(
-                    MerkleTree.verifyProof(root, leaves[j], j, proof),
+                    MerkleTree.verifyProof(root, leaves[j], proof),
                     string.concat("Tree ", vm.toString(i), " failed at leaf ", vm.toString(j))
                 );
             }

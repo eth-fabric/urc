@@ -753,74 +753,10 @@ contract RentrancyTester is UnitTestHelper {
     }
 }
 
-contract Foo {
-    function _hashToLeaves(IRegistry.SignedRegistration[] calldata regs, address owner)
-        external
-        pure
-        returns (bytes32[] memory leaves)
-    {
-        assembly {
-            let dataOffset := regs.offset
-            let len := regs.length
-            mstore(leaves, len) // Set length
-
-            let outPtr := add(leaves, 0x20) // First output slot
-            let memPtr := add(outPtr, shl(5, len)) // Reserve space for output
-            mstore(0x40, add(memPtr, 0x200)) // Update free memory pointer
-
-            let structSize := 0x180 // 384 bytes per SignedRegistration
-            let paddedSize := 0x1A0 // 416 bytes = struct + address + padding
-
-            mstore(add(memPtr, structSize), owner) // Write owner after struct
-
-            for { let i := 0 } lt(i, len) { i := add(i, 1) } {
-                let regOffset := add(dataOffset, mul(i, structSize))
-                calldatacopy(memPtr, regOffset, structSize)
-                mstore(add(outPtr, shl(5, i)), keccak256(memPtr, paddedSize))
-            }
-        }
-    }
-
-    // function _hashToLeaves(
-    //     IRegistry.SignedRegistration[] memory regs,
-    //     address owner
-    // ) external pure returns (bytes32[] memory leaves) {
-    //     uint256 len = regs.length;
-    //     uint256 dataOffset;
-
-    //     assembly {
-    //         dataOffset := calldataload(regs) // Equivalent to regs.offset
-    //         mstore(leaves, len) // Set length
-
-    //         let outPtr := add(leaves, 0x20) // First output slot
-    //         let memPtr := add(outPtr, shl(5, len)) // Reserve space for output
-    //         mstore(0x40, add(memPtr, 0x200)) // Update free memory pointer
-
-    //         let structSize := 0x180 // 384 bytes per SignedRegistration
-    //         let paddedSize := 0x1A0 // 416 bytes = struct + address + padding
-
-    //         mstore(add(memPtr, structSize), owner) // Write owner after struct
-
-    //         for {
-    //             let i := 0
-    //         } lt(i, len) {
-    //             i := add(i, 1)
-    //         } {
-    //             let regOffset := add(dataOffset, mul(i, structSize))
-    //             calldatacopy(memPtr, regOffset, structSize)
-    //             mstore(add(outPtr, shl(5, i)), keccak256(memPtr, paddedSize))
-    //         }
-    //     }
-    // }
-}
-
 contract RegisterGasTest is UnitTestHelper {
-    Foo foo;
-
     function setUp() public {
         registry = new Registry(defaultConfig());
         vm.deal(operator, 100 ether);
-        foo = new Foo();
     }
 
     function registrations(uint256 n) internal returns (IRegistry.SignedRegistration[] memory) {

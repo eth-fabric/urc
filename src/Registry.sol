@@ -647,7 +647,6 @@ contract Registry is IRegistry {
     {
         proof.registrationRoot = _merkleizeSignedRegistrationsWithOwner(regs, owner);
         proof.registration = regs[leafIndex];
-        proof.leafIndex = leafIndex;
 
         bytes32[] memory leaves = _hashToLeaves(regs, owner);
         proof.merkleProof = MerkleTree.generateProof(leaves, leafIndex);
@@ -697,12 +696,12 @@ contract Registry is IRegistry {
             SlashingType.Commitment, registrationRoot, operator.data.owner, msg.sender, slasher, slashAmountWei
         );
     }
-
     /// @notice Hashes an array of `SignedRegistration` structs with the owner address
     /// @dev Leaves are created by abi-encoding the `SignedRegistration` structs with the owner address, then hashing with keccak256.
     /// @param regs The array of `SignedRegistration` structs to hash
     /// @param owner The owner address of the operator
     /// @return leaves The array of hashed leaves
+
     function _hashToLeaves(SignedRegistration[] calldata regs, address owner)
         internal
         pure
@@ -739,7 +738,7 @@ contract Registry is IRegistry {
     function _verifyMerkleProof(RegistrationProof calldata proof) internal view {
         address owner = operators[proof.registrationRoot].data.owner;
         bytes32 leaf = keccak256(abi.encode(proof.registration, owner));
-        if (!MerkleTree.verifyProofCalldata(proof.registrationRoot, leaf, proof.leafIndex, proof.merkleProof)) {
+        if (!MerkleTree.verifyProofCalldata(proof.registrationRoot, leaf, proof.merkleProof)) {
             revert InvalidProof();
         }
     }

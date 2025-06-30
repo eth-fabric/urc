@@ -148,8 +148,7 @@ contract SlashCommitmentTester is UnitTestHelper {
         IRegistry.RegistrationProof memory proof = IRegistry.RegistrationProof({
             registrationRoot: result.registrationRoot,
             registration: result.registrations[0],
-            merkleProof: new bytes32[](1),
-            leafIndex: 0
+            merkleProof: new bytes32[](1)
         });
 
         vm.warp(block.timestamp + registry.getConfig().fraudProofWindow + 1);
@@ -825,8 +824,7 @@ contract SlashEquivocationTester is UnitTestHelper {
         IRegistry.RegistrationProof memory proof = IRegistry.RegistrationProof({
             registrationRoot: result.registrationRoot,
             registration: result.registrations[0],
-            merkleProof: new bytes32[](1),
-            leafIndex: 0
+            merkleProof: new bytes32[](1)
         });
 
         // Create second delegation

@@ -157,9 +157,6 @@ contract BaseScript is Script {
         // Write to json outfile if specified otherwise default "output/SignedRegistrations.json"
         (string memory _jsonFile,) = _getDefaultJson(_outfile, "RegistrationProof.json");
 
-        // Write the leafIndex to the json file
-        vm.writeJson(vm.toString(proof.leafIndex), _jsonFile, ".leafIndex");
-        vm.sleep(250);
         // Write the abi-encoded merklProof bytes32[] to the json file
         vm.writeJson(vm.toString(abi.encode(proof.merkleProof)), _jsonFile, ".merkleProof");
         vm.sleep(250);
@@ -180,8 +177,6 @@ contract BaseScript is Script {
         string memory json = vm.readFile(jsonFile);
 
         vm.sleep(500);
-
-        proof.leafIndex = vm.parseJsonUint(json, ".leafIndex");
 
         proof.merkleProof = abi.decode(vm.parseJsonBytes(json, ".merkleProof"), (bytes32[]));
 
