@@ -348,40 +348,4 @@ contract ReentrantSlashableRegistrationContract is ReentrantContract {
 /// @dev A contract that attempts to add collateral, unregister, claim collateral, and slash commitment via reentrancy
 contract ReentrantSlashEquivocation is ReentrantContract {
     constructor(address registryAddress) ReentrantContract(registryAddress) { }
-
-    // receive() external payable {
-    //     // revert("HERERE");
-    //     try registry.addCollateral{ value: msg.value }(registrationRoot) {
-    //         revert("should not be able to add collateral");
-    //     } catch (bytes memory _reason) {
-    //         errors += 1;
-    //     }
-
-    //     try registry.unregister(registrationRoot) {
-    //         revert("should not be able to unregister");
-    //     } catch (bytes memory _reason) {
-    //         errors += 1;
-    //     }
-
-    //     try registry.claimCollateral(registrationRoot) {
-    //         revert("should not be able to claim collateral");
-    //     } catch (bytes memory _reason) {
-    //         errors += 1;
-    //     }
-
-    //     // Setup proof
-    //     IRegistry.SignedRegistration[] memory _registrations = new IRegistry.SignedRegistration[](1);
-    //     _registrations[0] = registrations[0];
-
-    //     IRegistry.RegistrationProof memory proof = registry.getRegistrationProof(_registrations, address(this), 0);
-
-    //     try registry.slashEquivocation(proof, signedDelegation, signedDelegationTwo) {
-    //         revert("should not be able to slash equivocation again");
-    //     } catch (bytes memory _reason) {
-    //         errors += 1;
-    //     }
-
-    //     // all attempts to re-enter should have failed
-    //     require(errors == 4, "should have 4 errors");
-    // }
 }

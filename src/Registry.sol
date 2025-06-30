@@ -42,7 +42,9 @@ contract Registry is IRegistry {
         returns (bytes32 registrationRoot)
     {
         // At least minCollateralWei required to sufficiently reward fraud/equivocation challenges
-        if (msg.value < config.minCollateralWei) revert InsufficientCollateral();
+        if (msg.value < config.minCollateralWei) {
+            revert InsufficientCollateral();
+        }
 
         // Prevent overflow of collateral
         if (msg.value > type(uint80).max) revert CollateralOverflow();
@@ -60,7 +62,9 @@ contract Registry is IRegistry {
         if (operators[registrationRoot].data.deleted) revert OperatorDeleted();
 
         // Prevent duplicates from overwriting previous registrations
-        if (operators[registrationRoot].data.registeredAt != 0) revert OperatorAlreadyRegistered();
+        if (operators[registrationRoot].data.registeredAt != 0) {
+            revert OperatorAlreadyRegistered();
+        }
 
         // Each Operator is mapped to a unique registration root
         Operator storage newOperator = operators[registrationRoot];
@@ -90,7 +94,9 @@ contract Registry is IRegistry {
         if (operator.data.owner != msg.sender) revert WrongOperator();
 
         // Prevent double unregistrations
-        if (operator.data.unregisteredAt != type(uint48).max) revert AlreadyUnregistered();
+        if (operator.data.unregisteredAt != type(uint48).max) {
+            revert AlreadyUnregistered();
+        }
 
         // Prevent a slashed operator from unregistering
         // They must wait for the slash window to pass before calling claimSlashedCollateral()
@@ -121,10 +127,14 @@ contract Registry is IRegistry {
         SlasherCommitment storage slasherCommitment = operator.slasherCommitments[slasher];
 
         // Check if they've been slashed before
-        if (slasherCommitment.slashed || operator.data.slashedAt != 0) revert SlashingAlreadyOccurred();
+        if (slasherCommitment.slashed || operator.data.slashedAt != 0) {
+            revert SlashingAlreadyOccurred();
+        }
 
         // Check if already opted in
-        if (slasherCommitment.optedOutAt < slasherCommitment.optedInAt) revert AlreadyOptedIn();
+        if (slasherCommitment.optedOutAt < slasherCommitment.optedInAt) {
+            revert AlreadyOptedIn();
+        }
 
         // If previously opted out, enforce delay before allowing new opt-in
         if (slasherCommitment.optedOutAt != 0 && block.timestamp < slasherCommitment.optedOutAt + config.optInDelay) {
@@ -153,10 +163,14 @@ contract Registry is IRegistry {
         SlasherCommitment storage slasherCommitment = operator.slasherCommitments[slasher];
 
         // Check if already opted out or never opted in
-        if (slasherCommitment.optedOutAt >= slasherCommitment.optedInAt) revert NotOptedIn();
+        if (slasherCommitment.optedOutAt >= slasherCommitment.optedInAt) {
+            revert NotOptedIn();
+        }
 
         // Enforce a delay before allowing opt-out
-        if (block.timestamp < slasherCommitment.optedInAt + config.optInDelay) revert OptInDelayNotMet();
+        if (block.timestamp < slasherCommitment.optedInAt + config.optInDelay) {
+            revert OptInDelayNotMet();
+        }
 
         // Save the block number
         slasherCommitment.optedOutAt = uint48(block.timestamp);
@@ -222,7 +236,9 @@ contract Registry is IRegistry {
         if (operator.data.collateralWei == 0) revert NoCollateral();
 
         // They must have at least the minimum collateral for _rewardAndBurn
-        if (operator.data.collateralWei < config.minCollateralWei) revert CollateralBelowMinimum();
+        if (operator.data.collateralWei < config.minCollateralWei) {
+            revert CollateralBelowMinimum();
+        }
 
         // Verify the registration is part of the registry
         // It will revert if the registration proof is invalid
@@ -286,7 +302,9 @@ contract Registry is IRegistry {
 
         // Verify the commitment was signed by the commitment key from the Delegation
         address committer = ECDSA.recover(keccak256(abi.encode(commitment.commitment)), commitment.signature);
-        if (committer != delegation.delegation.committer) revert UnauthorizedCommitment();
+        if (committer != delegation.delegation.committer) {
+            revert UnauthorizedCommitment();
+        }
 
         // Prevent same slashing from occurring again
         slashedBefore[slashingDigest] = true;
@@ -322,7 +340,9 @@ contract Registry is IRegistry {
 
         // Verify the commitment was signed by the registered committer from the optInToSlasher() function
         address committer = ECDSA.recover(keccak256(abi.encode(commitment.commitment)), commitment.signature);
-        if (committer != slasherCommitment.committer) revert UnauthorizedCommitment();
+        if (committer != slasherCommitment.committer) {
+            revert UnauthorizedCommitment();
+        }
 
         // Save timestamp only once to start the slash window
         if (operator.data.slashedAt == 0) {
@@ -393,7 +413,9 @@ contract Registry is IRegistry {
         _verifyDelegation(proof, delegationTwo);
 
         // Verify the delegations are for the same slot
-        if (delegationOne.delegation.slot != delegationTwo.delegation.slot) revert DifferentSlots();
+        if (delegationOne.delegation.slot != delegationTwo.delegation.slot) {
+            revert DifferentSlots();
+        }
 
         // Mark the operator as equivocated
         operator.data.equivocated = true;
@@ -466,7 +488,9 @@ contract Registry is IRegistry {
         if (operator.data.deleted) revert OperatorDeleted();
 
         // Check that they've unregistered
-        if (operator.data.unregisteredAt == type(uint48).max) revert NotUnregistered();
+        if (operator.data.unregisteredAt == type(uint48).max) {
+            revert NotUnregistered();
+        }
 
         // Check that enough time has passed
         if (block.timestamp < operator.data.unregisteredAt + config.unregistrationDelay) {
@@ -654,7 +678,9 @@ contract Registry is IRegistry {
         if (slashAmountWei == 0) revert NoCollateralSlashed();
 
         // Prevent slashing more than the operator's collateral
-        if (slashAmountWei > operator.data.collateralWei) revert SlashAmountExceedsCollateral();
+        if (slashAmountWei > operator.data.collateralWei) {
+            revert SlashAmountExceedsCollateral();
+        }
 
         // Decrement operator's collateral
         operator.data.collateralWei -= uint80(slashAmountWei);

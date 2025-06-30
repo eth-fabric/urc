@@ -752,3 +752,159 @@ contract RentrancyTester is UnitTestHelper {
         registry.slashRegistration(proof);
     }
 }
+
+contract Foo {
+    function _hashToLeaves(IRegistry.SignedRegistration[] calldata regs, address owner)
+        external
+        pure
+        returns (bytes32[] memory leaves)
+    {
+        assembly {
+            let dataOffset := regs.offset
+            let len := regs.length
+            mstore(leaves, len) // Set length
+
+            let outPtr := add(leaves, 0x20) // First output slot
+            let memPtr := add(outPtr, shl(5, len)) // Reserve space for output
+            mstore(0x40, add(memPtr, 0x200)) // Update free memory pointer
+
+            let structSize := 0x180 // 384 bytes per SignedRegistration
+            let paddedSize := 0x1A0 // 416 bytes = struct + address + padding
+
+            mstore(add(memPtr, structSize), owner) // Write owner after struct
+
+            for { let i := 0 } lt(i, len) { i := add(i, 1) } {
+                let regOffset := add(dataOffset, mul(i, structSize))
+                calldatacopy(memPtr, regOffset, structSize)
+                mstore(add(outPtr, shl(5, i)), keccak256(memPtr, paddedSize))
+            }
+        }
+    }
+
+    // function _hashToLeaves(
+    //     IRegistry.SignedRegistration[] memory regs,
+    //     address owner
+    // ) external pure returns (bytes32[] memory leaves) {
+    //     uint256 len = regs.length;
+    //     uint256 dataOffset;
+
+    //     assembly {
+    //         dataOffset := calldataload(regs) // Equivalent to regs.offset
+    //         mstore(leaves, len) // Set length
+
+    //         let outPtr := add(leaves, 0x20) // First output slot
+    //         let memPtr := add(outPtr, shl(5, len)) // Reserve space for output
+    //         mstore(0x40, add(memPtr, 0x200)) // Update free memory pointer
+
+    //         let structSize := 0x180 // 384 bytes per SignedRegistration
+    //         let paddedSize := 0x1A0 // 416 bytes = struct + address + padding
+
+    //         mstore(add(memPtr, structSize), owner) // Write owner after struct
+
+    //         for {
+    //             let i := 0
+    //         } lt(i, len) {
+    //             i := add(i, 1)
+    //         } {
+    //             let regOffset := add(dataOffset, mul(i, structSize))
+    //             calldatacopy(memPtr, regOffset, structSize)
+    //             mstore(add(outPtr, shl(5, i)), keccak256(memPtr, paddedSize))
+    //         }
+    //     }
+    // }
+}
+
+contract RegisterGasTest is UnitTestHelper {
+    Foo foo;
+
+    function setUp() public {
+        registry = new Registry(defaultConfig());
+        vm.deal(operator, 100 ether);
+        foo = new Foo();
+    }
+
+    function registrations(uint256 n) internal returns (IRegistry.SignedRegistration[] memory) {
+        IRegistry.SignedRegistration[] memory registrations = new IRegistry.SignedRegistration[](n);
+        for (uint256 i = 0; i < n; i++) {
+            registrations[i] = _createSignedRegistration(SECRET_KEY_1 + i, operator);
+        }
+        return registrations;
+    }
+
+    function test_gas_register_1() public {
+        IRegistry.SignedRegistration[] memory registrations = registrations(1);
+        vm.resetGasMetering();
+        vm.startPrank(operator);
+        registry.register{ value: registry.getConfig().minCollateralWei }(registrations, operator);
+    }
+
+    function test_gas_register_2() public {
+        IRegistry.SignedRegistration[] memory registrations = registrations(2);
+        vm.resetGasMetering();
+        vm.startPrank(operator);
+        registry.register{ value: registry.getConfig().minCollateralWei }(registrations, operator);
+    }
+
+    function test_gas_register_4() public {
+        IRegistry.SignedRegistration[] memory registrations = registrations(4);
+        vm.resetGasMetering();
+        vm.startPrank(operator);
+        registry.register{ value: registry.getConfig().minCollateralWei }(registrations, operator);
+    }
+
+    function test_gas_register_8() public {
+        IRegistry.SignedRegistration[] memory registrations = registrations(8);
+        vm.resetGasMetering();
+        vm.startPrank(operator);
+        registry.register{ value: registry.getConfig().minCollateralWei }(registrations, operator);
+    }
+
+    function test_gas_register_16() public {
+        IRegistry.SignedRegistration[] memory registrations = registrations(16);
+        vm.resetGasMetering();
+        vm.startPrank(operator);
+        registry.register{ value: registry.getConfig().minCollateralWei }(registrations, operator);
+    }
+
+    function test_gas_register_32() public {
+        IRegistry.SignedRegistration[] memory registrations = registrations(32);
+        vm.resetGasMetering();
+        vm.startPrank(operator);
+        registry.register{ value: registry.getConfig().minCollateralWei }(registrations, operator);
+    }
+
+    function test_gas_register_64() public {
+        IRegistry.SignedRegistration[] memory registrations = registrations(64);
+        vm.resetGasMetering();
+        vm.startPrank(operator);
+        registry.register{ value: registry.getConfig().minCollateralWei }(registrations, operator);
+    }
+
+    function test_gas_register_128() public {
+        IRegistry.SignedRegistration[] memory registrations = registrations(128);
+        vm.resetGasMetering();
+        vm.startPrank(operator);
+        registry.register{ value: registry.getConfig().minCollateralWei }(registrations, operator);
+    }
+
+    function test_gas_register_256() public {
+        IRegistry.SignedRegistration[] memory registrations = registrations(256);
+        vm.resetGasMetering();
+        vm.startPrank(operator);
+        registry.register{ value: registry.getConfig().minCollateralWei }(registrations, operator);
+    }
+
+    function test_gas_register_512() public {
+        IRegistry.SignedRegistration[] memory registrations = registrations(512);
+        vm.resetGasMetering();
+        vm.startPrank(operator);
+        registry.register{ value: registry.getConfig().minCollateralWei }(registrations, operator);
+    }
+
+    function test_gas_register_1024() public {
+        IRegistry.SignedRegistration[] memory registrations = registrations(1024);
+        vm.resetGasMetering();
+        vm.startPrank(operator);
+        registry.register{ value: registry.getConfig().minCollateralWei }(registrations, operator);
+    }
+}
