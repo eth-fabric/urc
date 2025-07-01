@@ -184,8 +184,9 @@ contract BLSGasTest is Test {
 
     function testSigningGas() public {
         BLS.G2Point memory messagePoint = BLS.toMessagePoint("hello", "domain");
+        BLS.G1Point memory publicKey = BLS.toPublicKey(1234);
         vm.resetGasMetering();
-        BLS.G2Mul(messagePoint, 1234);
+        BLS.sign("hello", 1234, "domain");
     }
 
     function testVerifyingSingleSignatureGas() public {
@@ -194,15 +195,7 @@ contract BLSGasTest is Test {
         BLS.G2Point memory signature = BLS.sign("hello", 1234, "domain");
 
         vm.resetGasMetering();
-        BLS.G1Point[] memory g1Points = new BLS.G1Point[](2);
-        g1Points[0] = BLS.NEGATED_G1_GENERATOR();
-        g1Points[1] = publicKey;
-
-        BLS.G2Point[] memory g2Points = new BLS.G2Point[](2);
-        g2Points[0] = signature;
-        g2Points[1] = messagePoint;
-
-        BLS.Pairing(g1Points, g2Points);
+        BLS.verify("hello", signature, publicKey, "domain");
     }
 
     function testG1PointCompressGas() public {
