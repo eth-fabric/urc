@@ -3,14 +3,12 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import { ECDSA } from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
-import { BLS } from "./lib/BLS.sol";
+import { BLSUtils } from "./lib/BLSUtils.sol";
 import { MerkleTree } from "./lib/MerkleTree.sol";
 import { IRegistry } from "./IRegistry.sol";
 import { ISlasher } from "./ISlasher.sol";
 
 contract Registry is IRegistry {
-    using BLS for *;
-
     /// @notice Mapping from registration merkle roots to Operator structs
     mapping(bytes32 registrationRoot => Operator) private operators;
 
@@ -248,8 +246,11 @@ contract Registry is IRegistry {
         bytes memory message = abi.encode(operator.data.owner);
 
         // Verify registration signature, note the domain separator mixin
-        if (BLS.verify(message, proof.registration.signature, proof.registration.pubkey, REGISTRATION_DOMAIN_SEPARATOR))
-        {
+        if (
+            BLSUtils.verify(
+                message, proof.registration.signature, proof.registration.pubkey, REGISTRATION_DOMAIN_SEPARATOR
+            )
+        ) {
             revert FraudProofChallengeInvalid();
         }
 
@@ -748,7 +749,9 @@ contract Registry is IRegistry {
         bytes memory message = abi.encode(delegation.delegation);
 
         // Verify it was signed by the registered BLS key
-        if (!BLS.verify(message, delegation.signature, delegation.delegation.proposer, DELEGATION_DOMAIN_SEPARATOR)) {
+        if (
+            !BLSUtils.verify(message, delegation.signature, delegation.delegation.proposer, DELEGATION_DOMAIN_SEPARATOR)
+        ) {
             revert DelegationSignatureInvalid();
         }
     }

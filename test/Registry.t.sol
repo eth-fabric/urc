@@ -4,14 +4,13 @@ pragma solidity >=0.8.0 <0.9.0;
 import "forge-std/Test.sol";
 import "../src/Registry.sol";
 import "../src/IRegistry.sol";
-import { BLS } from "../src/lib/BLS.sol";
+import { BLS } from "solady/utils/ext/ithaca/BLS.sol";
+import { BLSUtils } from "../src/lib/BLSUtils.sol";
 import {
     UnitTestHelper, ReentrantRegistrationContract, ReentrantSlashableRegistrationContract
 } from "./UnitTestHelper.sol";
 
 contract RegisterTester is UnitTestHelper {
-    using BLS for *;
-
     function setUp() public {
         registry = new Registry(defaultConfig());
         vm.deal(operator, 100 ether);
@@ -133,8 +132,6 @@ contract RegisterTester is UnitTestHelper {
 }
 
 contract UnregisterTester is UnitTestHelper {
-    using BLS for *;
-
     function setUp() public {
         registry = new Registry(defaultConfig());
         vm.deal(operator, 100 ether);
@@ -190,8 +187,6 @@ contract UnregisterTester is UnitTestHelper {
 }
 
 contract OptInAndOutTester is UnitTestHelper {
-    using BLS for *;
-
     function setUp() public {
         registry = new Registry(defaultConfig());
         vm.deal(operator, 100 ether);
@@ -307,8 +302,6 @@ contract OptInAndOutTester is UnitTestHelper {
 }
 
 contract ClaimCollateralTester is UnitTestHelper {
-    using BLS for *;
-
     function setUp() public {
         registry = new Registry(defaultConfig());
         vm.deal(operator, 100 ether);
@@ -396,8 +389,6 @@ contract ClaimCollateralTester is UnitTestHelper {
 }
 
 contract AddCollateralTester is UnitTestHelper {
-    using BLS for *;
-
     function setUp() public {
         registry = new Registry(defaultConfig());
         vm.deal(operator, 100 ether);
@@ -455,8 +446,6 @@ contract AddCollateralTester is UnitTestHelper {
 }
 
 contract SlashRegistrationTester is UnitTestHelper {
-    using BLS for *;
-
     function setUp() public {
         registry = new Registry(defaultConfig());
         vm.deal(operator, 100 ether);
@@ -469,7 +458,7 @@ contract SlashRegistrationTester is UnitTestHelper {
 
         IRegistry.SignedRegistration[] memory registrations = new IRegistry.SignedRegistration[](1);
 
-        BLS.G1Point memory pubkey = BLS.toPublicKey(SECRET_KEY_1);
+        BLS.G1Point memory pubkey = BLSUtils.toPublicKey(SECRET_KEY_1);
 
         // Use a different secret key to sign the registration
         BLS.G2Point memory signature = _registrationSignature(SECRET_KEY_2, operator);
@@ -647,7 +636,7 @@ contract SlashRegistrationTester is UnitTestHelper {
 
         IRegistry.SignedRegistration[] memory registrations = new IRegistry.SignedRegistration[](1);
 
-        BLS.G1Point memory pubkey = BLS.toPublicKey(SECRET_KEY_1);
+        BLS.G1Point memory pubkey = BLSUtils.toPublicKey(SECRET_KEY_1);
 
         // Use a different secret key to sign the registration
         BLS.G2Point memory signature = _registrationSignature(SECRET_KEY_2, operator);
@@ -669,8 +658,6 @@ contract SlashRegistrationTester is UnitTestHelper {
 }
 
 contract RentrancyTester is UnitTestHelper {
-    using BLS for *;
-
     function setUp() public {
         registry = new Registry(defaultConfig());
         vm.deal(operator, 100 ether);

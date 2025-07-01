@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 pragma solidity >=0.8.0 <0.9.0;
 
-import { BLS } from "./lib/BLS.sol";
+import { BLS } from "solady/utils/ext/ithaca/BLS.sol";
 import { ISlasher } from "./ISlasher.sol";
 
 interface IRegistry {

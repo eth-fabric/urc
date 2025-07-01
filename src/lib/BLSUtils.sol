@@ -59,7 +59,6 @@ library BLSUtils {
         return bytes32(x);
     }
 
-
     /// @dev Referenced from https://eips.ethereum.org/EIPS/eip-2537#curve-parameters
     function baseFieldModulus() internal pure returns (uint256[2] memory) {
         return [
@@ -146,12 +145,7 @@ library BLSUtils {
         returns (BLS.G2Point memory)
     {
         return BLS.toG2(
-            BLS.Fp2({
-                c0_a: 0,
-                c0_b: 0,
-                c1_a: 0,
-                c1_b: keccak256(abi.encodePacked(domainSeparator, message))
-            })
+            BLS.Fp2({ c0_a: 0, c0_b: 0, c1_a: 0, c1_b: keccak256(abi.encodePacked(domainSeparator, message)) })
         );
     }
 
@@ -211,7 +205,8 @@ library BLSUtils {
 
         // Set the third MSB if point.y is lexicographically larger than the y in negated point
         BLS.G1Point memory negatedPoint = negate(point);
-        if (_greaterThan(BLS.Fp({ a: point.y_a, b: point.y_b }), BLS.Fp({ a: negatedPoint.y_a, b: negatedPoint.y_b }))) {
+        if (_greaterThan(BLS.Fp({ a: point.y_a, b: point.y_b }), BLS.Fp({ a: negatedPoint.y_a, b: negatedPoint.y_b })))
+        {
             r.a = bytes32(uint256(r.a) | (1 << 125));
         }
 

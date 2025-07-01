@@ -5,11 +5,10 @@ import "forge-std/Test.sol";
 import "../src/Registry.sol";
 import "../src/IRegistry.sol";
 import "../src/ISlasher.sol";
-import { BLS } from "../src/lib/BLS.sol";
+import { BLS } from "solady/utils/ext/ithaca/BLS.sol";
+import { BLSUtils } from "../src/lib/BLSUtils.sol";
 
 contract UnitTestHelper is Test {
-    using BLS for *;
-
     Registry registry;
     address operator = makeAddr("operator");
     address challenger = makeAddr("challenger");
@@ -33,7 +32,7 @@ contract UnitTestHelper is Test {
     /// @dev Helper to create a BLS signature for a registration
     function _registrationSignature(uint256 secretKey, address owner) internal view returns (BLS.G2Point memory) {
         bytes memory message = abi.encode(owner);
-        return BLS.sign(message, secretKey, registry.REGISTRATION_DOMAIN_SEPARATOR());
+        return BLSUtils.sign(message, secretKey, registry.REGISTRATION_DOMAIN_SEPARATOR());
     }
 
     /// @dev Creates a Registration struct with a real BLS keypair
@@ -42,7 +41,7 @@ contract UnitTestHelper is Test {
         view
         returns (IRegistry.SignedRegistration memory)
     {
-        BLS.G1Point memory pubkey = BLS.toPublicKey(secretKey);
+        BLS.G1Point memory pubkey = BLSUtils.toPublicKey(secretKey);
         BLS.G2Point memory signature = _registrationSignature(secretKey, owner);
 
         return IRegistry.SignedRegistration({ pubkey: pubkey, signature: signature });
@@ -135,7 +134,7 @@ contract UnitTestHelper is Test {
         returns (ISlasher.SignedDelegation memory)
     {
         BLS.G2Point memory signature =
-            BLS.sign(abi.encode(delegation), secretKey, registry.DELEGATION_DOMAIN_SEPARATOR());
+            BLSUtils.sign(abi.encode(delegation), secretKey, registry.DELEGATION_DOMAIN_SEPARATOR());
         return ISlasher.SignedDelegation({ delegation: delegation, signature: signature });
     }
 
@@ -167,8 +166,8 @@ contract UnitTestHelper is Test {
 
         // Sign delegation
         ISlasher.Delegation memory delegation = ISlasher.Delegation({
-            proposer: BLS.toPublicKey(params.proposerSecretKey),
-            delegate: BLS.toPublicKey(params.delegateSecretKey),
+            proposer: BLSUtils.toPublicKey(params.proposerSecretKey),
+            delegate: BLSUtils.toPublicKey(params.delegateSecretKey),
             committer: params.committer,
             slot: params.slot,
             metadata: params.metadata
@@ -193,8 +192,8 @@ contract UnitTestHelper is Test {
 
         // Sign delegation
         ISlasher.Delegation memory delegation = ISlasher.Delegation({
-            proposer: BLS.toPublicKey(params.proposerSecretKey),
-            delegate: BLS.toPublicKey(params.delegateSecretKey),
+            proposer: BLSUtils.toPublicKey(params.proposerSecretKey),
+            delegate: BLSUtils.toPublicKey(params.delegateSecretKey),
             committer: params.committer,
             slot: params.slot,
             metadata: params.metadata
@@ -204,8 +203,8 @@ contract UnitTestHelper is Test {
 
         // Sign a second delegation to equivocate
         ISlasher.Delegation memory delegationTwo = ISlasher.Delegation({
-            proposer: BLS.toPublicKey(params.proposerSecretKey),
-            delegate: BLS.toPublicKey(params.delegateSecretKey),
+            proposer: BLSUtils.toPublicKey(params.proposerSecretKey),
+            delegate: BLSUtils.toPublicKey(params.delegateSecretKey),
             committer: params.committer,
             slot: params.slot,
             metadata: "different metadata"
