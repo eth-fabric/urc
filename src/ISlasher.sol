@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 pragma solidity >=0.8.0 <0.9.0;
 
-import { BLS } from "./lib/BLS.sol";
+import { BLS } from "solady/utils/ext/ithaca/BLS.sol";
 
 interface ISlasher {
     /// @notice A Delegation message from a proposer's BLS key to a delegate's BLS and ECDSA key

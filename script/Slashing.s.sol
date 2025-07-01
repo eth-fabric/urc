@@ -5,6 +5,7 @@ import "forge-std/Script.sol";
 import "../src/IRegistry.sol";
 import "./BaseScript.s.sol";
 import "../src/ISlasher.sol";
+import { BLSUtils } from "../src/lib/BLSUtils.sol";
 import "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 
 import { DummySlasher } from "../test/Slasher.t.sol";
@@ -203,8 +204,8 @@ contract SlashingScript is BaseScript {
         ISlasher.SignedDelegation memory signedDelegation = _signTestDelegation(
             proposerPrivateKey,
             ISlasher.Delegation({
-                proposer: BLS.toPublicKey(proposerPrivateKey),
-                delegate: BLS.toPublicKey(0), // unused
+                proposer: BLSUtils.toPublicKey(proposerPrivateKey),
+                delegate: BLSUtils.toPublicKey(0), // unused
                 committer: committer,
                 slot: 5,
                 metadata: ""

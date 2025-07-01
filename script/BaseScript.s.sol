@@ -4,8 +4,9 @@ pragma solidity >=0.8.0 <0.9.0;
 import "forge-std/Script.sol";
 import "../src/IRegistry.sol";
 import "../src/lib/MerkleTree.sol";
-import "../src/lib/BLS.sol";
 import "../src/ISlasher.sol";
+import { BLS } from "solady/utils/ext/ithaca/BLS.sol";
+import { BLSUtils } from "../src/lib/BLSUtils.sol";
 
 contract BaseScript is Script {
     bytes public constant REGISTRATION_DOMAIN_SEPARATOR = "0x00555243"; // "URC" in little endian
@@ -42,9 +43,9 @@ contract BaseScript is Script {
         view
         returns (IRegistry.SignedRegistration memory signedRegistration)
     {
-        BLS.G1Point memory pubkey = BLS.toPublicKey(privateKey);
+        BLS.G1Point memory pubkey = BLSUtils.toPublicKey(privateKey);
         bytes memory message = abi.encode(_owner);
-        BLS.G2Point memory signature = BLS.sign(message, privateKey, REGISTRATION_DOMAIN_SEPARATOR);
+        BLS.G2Point memory signature = BLSUtils.sign(message, privateKey, REGISTRATION_DOMAIN_SEPARATOR);
         signedRegistration = IRegistry.SignedRegistration({ pubkey: pubkey, signature: signature });
     }
 
@@ -66,7 +67,7 @@ contract BaseScript is Script {
         view
         returns (ISlasher.SignedDelegation memory signedDelegation)
     {
-        BLS.G2Point memory signature = BLS.sign(abi.encode(delegation), privateKey, DELEGATION_DOMAIN_SEPARATOR);
+        BLS.G2Point memory signature = BLSUtils.sign(abi.encode(delegation), privateKey, DELEGATION_DOMAIN_SEPARATOR);
         return ISlasher.SignedDelegation({ delegation: delegation, signature: signature });
     }
 
@@ -78,10 +79,10 @@ contract BaseScript is Script {
         address _committer,
         uint256 _slot
     ) internal view returns (ISlasher.SignedDelegation[] memory signedDelegations) {
-        BLS.G1Point memory proposer = BLS.toPublicKey(_proposerPrivateKey);
+        BLS.G1Point memory proposer = BLSUtils.toPublicKey(_proposerPrivateKey);
         signedDelegations = new ISlasher.SignedDelegation[](_n);
         for (uint256 i = 0; i < _n; i++) {
-            BLS.G1Point memory delegate = BLS.toPublicKey(_delegatePrivateKeyStart + i);
+            BLS.G1Point memory delegate = BLSUtils.toPublicKey(_delegatePrivateKeyStart + i);
             signedDelegations[i] = _signTestDelegation(
                 _proposerPrivateKey, // fixed proposer private key
                 ISlasher.Delegation({
@@ -157,9 +158,6 @@ contract BaseScript is Script {
         // Write to json outfile if specified otherwise default "output/SignedRegistrations.json"
         (string memory _jsonFile,) = _getDefaultJson(_outfile, "RegistrationProof.json");
 
-        // Write the leafIndex to the json file
-        vm.writeJson(vm.toString(proof.leafIndex), _jsonFile, ".leafIndex");
-        vm.sleep(250);
         // Write the abi-encoded merklProof bytes32[] to the json file
         vm.writeJson(vm.toString(abi.encode(proof.merkleProof)), _jsonFile, ".merkleProof");
         vm.sleep(250);
@@ -180,8 +178,6 @@ contract BaseScript is Script {
         string memory json = vm.readFile(jsonFile);
 
         vm.sleep(500);
-
-        proof.leafIndex = vm.parseJsonUint(json, ".leafIndex");
 
         proof.merkleProof = abi.decode(vm.parseJsonBytes(json, ".merkleProof"), (bytes32[]));
 
@@ -267,11 +263,13 @@ contract BaseScript is Script {
     {
         string memory s;
         for (uint256 i = 0; i < registrations.length; i++) {
-            BLS.G1Point memory pubkeyCopy = BLS.G1Point({
-                x: BLS.Fp({ a: registrations[i].pubkey.x.a, b: registrations[i].pubkey.x.b }),
-                y: BLS.Fp({ a: registrations[i].pubkey.y.a, b: registrations[i].pubkey.y.b })
-            });
-            BLS.Fp memory compressed = BLS.compress(pubkeyCopy);
+            BLS.G1Point memory pubkeyCopy = BLS.G1Point(
+                registrations[i].pubkey.x_a,
+                registrations[i].pubkey.x_b,
+                registrations[i].pubkey.y_a,
+                registrations[i].pubkey.y_b
+            );
+            BLS.Fp memory compressed = BLSUtils.compress(pubkeyCopy);
             bytes memory pubkey = abi.encode(compressed);
             bytes memory pubkeyPretty = _prettyPubKey(pubkey);
             s = string(abi.encodePacked(s, vm.toString(pubkeyPretty), ",\n"));
@@ -289,11 +287,10 @@ contract BaseScript is Script {
 
     function _prettyPrintPubKey(IRegistry.SignedRegistration memory registration) internal {
         // duplicate to prevent weird foundry memory issues
-        BLS.G1Point memory pubkeyCopy = BLS.G1Point({
-            x: BLS.Fp({ a: registration.pubkey.x.a, b: registration.pubkey.x.b }),
-            y: BLS.Fp({ a: registration.pubkey.y.a, b: registration.pubkey.y.b })
-        });
-        bytes memory pubkeyPretty = _prettyPubKey(abi.encode(BLS.compress(pubkeyCopy)));
+        BLS.G1Point memory pubkeyCopy = BLS.G1Point(
+            registration.pubkey.x_a, registration.pubkey.x_b, registration.pubkey.y_a, registration.pubkey.y_b
+        );
+        bytes memory pubkeyPretty = _prettyPubKey(abi.encode(BLSUtils.compress(pubkeyCopy)));
         console.log("Pubkey: ", vm.toString(pubkeyPretty));
     }
 }

@@ -16,7 +16,8 @@ import { TransactionDecoder } from "../example/lib/TransactionDecoder.sol";
 import { Registry } from "../src/Registry.sol";
 import { IRegistry } from "../src/IRegistry.sol";
 import { ISlasher } from "../src/ISlasher.sol";
-import { BLS } from "../src/lib/BLS.sol";
+import { BLS } from "solady/utils/ext/ithaca/BLS.sol";
+import { BLSUtils } from "../src/lib/BLSUtils.sol";
 import { MerkleTree } from "../src/lib/MerkleTree.sol";
 import { PreconfStructs } from "../example/PreconfStructs.sol";
 import { InclusionPreconfSlasher } from "../example/InclusionPreconfSlasher.sol";
@@ -40,7 +41,7 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
         vm.createSelectFork(vm.rpcUrl("mainnet"));
         registry = new Registry(defaultConfig());
         slasher = new InclusionPreconfSlasher(slashAmountWei, address(registry));
-        delegatePubKey = BLS.toPublicKey(SECRET_KEY_2);
+        delegatePubKey = BLSUtils.toPublicKey(SECRET_KEY_2);
         (committer, committerSecretKey) = makeAddrAndKey("commitmentsKey");
         vm.deal(challenger, 100 ether);
         vm.deal(operator, 100 ether);

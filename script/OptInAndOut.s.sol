@@ -4,7 +4,6 @@ pragma solidity >=0.8.0 <0.9.0;
 import "forge-std/Script.sol";
 import "../src/IRegistry.sol";
 import "./BaseScript.s.sol";
-import "../src/lib/BLS.sol";
 
 contract OptInAndOutScript is BaseScript {
     // forge script script/OptInAndOut.s.sol:OptInAndOutScript --sig "optInToSlasher(address,bytes32,address,address)" $REGISTRY_ADDRESS $REGISTRATION_ROOT $SLASHER $COMMITTER --account $FOUNDRY_WALLET --rpc-url $RPC_URL --broadcast

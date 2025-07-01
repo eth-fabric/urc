@@ -109,11 +109,13 @@ contract GettersScript is BaseScript {
         bytes32 hashedPubKey = keccak256(pubkey);
         for (uint256 i = 0; i < registrations.length; i++) {
             // Create a copy of the pubkey to prevent modification
-            BLS.G1Point memory pubkeyCopy = BLS.G1Point({
-                x: BLS.Fp({ a: registrations[i].pubkey.x.a, b: registrations[i].pubkey.x.b }),
-                y: BLS.Fp({ a: registrations[i].pubkey.y.a, b: registrations[i].pubkey.y.b })
-            });
-            bytes memory compressed = abi.encode(BLS.compress(pubkeyCopy));
+            BLS.G1Point memory pubkeyCopy = BLS.G1Point(
+                registrations[i].pubkey.x_a,
+                registrations[i].pubkey.x_b,
+                registrations[i].pubkey.y_a,
+                registrations[i].pubkey.y_b
+            );
+            bytes memory compressed = abi.encode(BLSUtils.compress(pubkeyCopy));
             bytes memory pubkeyPretty = _prettyPubKey(compressed);
             if (hashedPubKey == keccak256(pubkeyPretty)) {
                 leafIndex = i;
