@@ -3,7 +3,8 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
-import { BLS } from "../src/lib/BLS.sol";
+import { BLS } from "solady/utils/ext/ithaca/BLS.sol";
+import { BLSUtils } from "../src/lib/BLSUtils.sol";
 import { MerkleTree } from "../src/lib/MerkleTree.sol";
 import "../src/Registry.sol";
 import { IRegistry } from "../src/IRegistry.sol";
@@ -36,7 +37,7 @@ contract SlashCommitmentTester is UnitTestHelper {
         dummySlasher = new DummySlasher();
         vm.deal(operator, 100 ether);
         vm.deal(challenger, 100 ether);
-        delegatePubKey = BLS.toPublicKey(SECRET_KEY_2);
+        delegatePubKey = BLSUtils.toPublicKey(SECRET_KEY_2);
         (committer, committerSecretKey) = makeAddrAndKey("commitmentsKey");
     }
 
@@ -148,8 +149,7 @@ contract SlashCommitmentTester is UnitTestHelper {
         IRegistry.RegistrationProof memory proof = IRegistry.RegistrationProof({
             registrationRoot: result.registrationRoot,
             registration: result.registrations[0],
-            merkleProof: new bytes32[](1),
-            leafIndex: 0
+            merkleProof: new bytes32[](1)
         });
 
         vm.warp(block.timestamp + registry.getConfig().fraudProofWindow + 1);
@@ -349,7 +349,7 @@ contract SlashCommitmentFromOptInTester is UnitTestHelper {
         dummySlasher = new DummySlasher();
         vm.deal(operator, 100 ether);
         vm.deal(challenger, 100 ether);
-        delegatePubKey = BLS.toPublicKey(SECRET_KEY_2);
+        delegatePubKey = BLSUtils.toPublicKey(SECRET_KEY_2);
         (committer, committerSecretKey) = makeAddrAndKey("commitmentsKey");
     }
 
@@ -716,7 +716,7 @@ contract SlashEquivocationTester is UnitTestHelper {
         dummySlasher = new DummySlasher();
         vm.deal(operator, 100 ether);
         vm.deal(challenger, 100 ether);
-        delegatePubKey = BLS.toPublicKey(SECRET_KEY_2);
+        delegatePubKey = BLSUtils.toPublicKey(SECRET_KEY_2);
         (committer, committerSecretKey) = makeAddrAndKey("commitmentsKey");
     }
 
@@ -743,8 +743,8 @@ contract SlashEquivocationTester is UnitTestHelper {
 
         // Sign delegation
         ISlasher.Delegation memory delegationTwo = ISlasher.Delegation({
-            proposer: BLS.toPublicKey(params.proposerSecretKey),
-            delegate: BLS.toPublicKey(0), // different delegate
+            proposer: BLSUtils.toPublicKey(params.proposerSecretKey),
+            delegate: BLSUtils.toPublicKey(0), // different delegate
             committer: params.committer,
             slot: params.slot,
             metadata: ""
@@ -792,8 +792,8 @@ contract SlashEquivocationTester is UnitTestHelper {
 
         // Create second delegation
         ISlasher.Delegation memory delegationTwo = ISlasher.Delegation({
-            proposer: BLS.toPublicKey(params.proposerSecretKey),
-            delegate: BLS.toPublicKey(0), // different delegate
+            proposer: BLSUtils.toPublicKey(params.proposerSecretKey),
+            delegate: BLSUtils.toPublicKey(0), // different delegate
             committer: params.committer,
             slot: params.slot,
             metadata: ""
@@ -825,14 +825,13 @@ contract SlashEquivocationTester is UnitTestHelper {
         IRegistry.RegistrationProof memory proof = IRegistry.RegistrationProof({
             registrationRoot: result.registrationRoot,
             registration: result.registrations[0],
-            merkleProof: new bytes32[](1),
-            leafIndex: 0
+            merkleProof: new bytes32[](1)
         });
 
         // Create second delegation
         ISlasher.Delegation memory delegationTwo = ISlasher.Delegation({
-            proposer: BLS.toPublicKey(params.proposerSecretKey),
-            delegate: BLS.toPublicKey(0), // different delegate
+            proposer: BLSUtils.toPublicKey(params.proposerSecretKey),
+            delegate: BLSUtils.toPublicKey(0), // different delegate
             committer: params.committer,
             slot: params.slot,
             metadata: ""
@@ -894,8 +893,8 @@ contract SlashEquivocationTester is UnitTestHelper {
 
         // Create second delegation with different slot
         ISlasher.Delegation memory delegationTwo = ISlasher.Delegation({
-            proposer: BLS.toPublicKey(params.proposerSecretKey),
-            delegate: BLS.toPublicKey(params.delegateSecretKey),
+            proposer: BLSUtils.toPublicKey(params.proposerSecretKey),
+            delegate: BLSUtils.toPublicKey(params.delegateSecretKey),
             committer: params.committer,
             slot: params.slot + 1, // Different slot
             metadata: ""
@@ -929,8 +928,8 @@ contract SlashEquivocationTester is UnitTestHelper {
 
         // Create second delegation
         ISlasher.Delegation memory delegationTwo = ISlasher.Delegation({
-            proposer: BLS.toPublicKey(params.proposerSecretKey),
-            delegate: BLS.toPublicKey(0), // different delegate
+            proposer: BLSUtils.toPublicKey(params.proposerSecretKey),
+            delegate: BLSUtils.toPublicKey(0), // different delegate
             committer: params.committer,
             slot: params.slot,
             metadata: ""
@@ -972,8 +971,8 @@ contract SlashEquivocationTester is UnitTestHelper {
 
         // Create second delegation
         ISlasher.Delegation memory delegationTwo = ISlasher.Delegation({
-            proposer: BLS.toPublicKey(params.proposerSecretKey),
-            delegate: BLS.toPublicKey(0), // different delegate
+            proposer: BLSUtils.toPublicKey(params.proposerSecretKey),
+            delegate: BLSUtils.toPublicKey(0), // different delegate
             committer: params.committer,
             slot: params.slot,
             metadata: ""
@@ -1009,7 +1008,7 @@ contract SlashReentrantTester is UnitTestHelper {
         dummySlasher = new DummySlasher();
         vm.deal(operator, 100 ether);
         vm.deal(challenger, 100 ether);
-        delegatePubKey = BLS.toPublicKey(SECRET_KEY_2);
+        delegatePubKey = BLSUtils.toPublicKey(SECRET_KEY_2);
         (committer, committerSecretKey) = makeAddrAndKey("commitmentsKey");
     }
 
@@ -1047,8 +1046,8 @@ contract SlashReentrantTester is UnitTestHelper {
         ISlasher.SignedDelegation memory signedDelegationTwo = signDelegation(
             params.proposerSecretKey,
             ISlasher.Delegation({
-                proposer: BLS.toPublicKey(params.proposerSecretKey),
-                delegate: BLS.toPublicKey(0), // different delegate
+                proposer: BLSUtils.toPublicKey(params.proposerSecretKey),
+                delegate: BLSUtils.toPublicKey(0), // different delegate
                 committer: params.committer,
                 slot: params.slot,
                 metadata: ""
@@ -1110,7 +1109,7 @@ contract SlashConditionTester is UnitTestHelper {
         dummySlasher = new DummySlasher();
         vm.deal(operator, 100 ether);
         vm.deal(challenger, 100 ether);
-        delegatePubKey = BLS.toPublicKey(SECRET_KEY_2);
+        delegatePubKey = BLSUtils.toPublicKey(SECRET_KEY_2);
         (committer, committerSecretKey) = makeAddrAndKey("commitmentsKey");
     }
 
@@ -1133,8 +1132,8 @@ contract SlashConditionTester is UnitTestHelper {
         ISlasher.SignedDelegation memory signedDelegationTwo = signDelegation(
             params.proposerSecretKey,
             ISlasher.Delegation({
-                proposer: BLS.toPublicKey(params.proposerSecretKey),
-                delegate: BLS.toPublicKey(0), // different delegate
+                proposer: BLSUtils.toPublicKey(params.proposerSecretKey),
+                delegate: BLSUtils.toPublicKey(0), // different delegate
                 committer: params.committer,
                 slot: params.slot,
                 metadata: ""
@@ -1181,8 +1180,8 @@ contract SlashConditionTester is UnitTestHelper {
         ISlasher.SignedDelegation memory signedDelegationTwo = signDelegation(
             params.proposerSecretKey,
             ISlasher.Delegation({
-                proposer: BLS.toPublicKey(params.proposerSecretKey),
-                delegate: BLS.toPublicKey(0), // different delegate
+                proposer: BLSUtils.toPublicKey(params.proposerSecretKey),
+                delegate: BLSUtils.toPublicKey(0), // different delegate
                 committer: params.committer,
                 slot: params.slot,
                 metadata: ""

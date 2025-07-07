@@ -4,7 +4,6 @@ pragma solidity >=0.8.0 <0.9.0;
 import "forge-std/Script.sol";
 import "../src/IRegistry.sol";
 import "./BaseScript.s.sol";
-import "../src/lib/BLS.sol";
 
 contract RegisterScript is BaseScript {
     // forge script script/Register.s.sol:RegisterScript --sig "register(address,uint256,string)" $REGISTRY_ADDRESS $COLLATERAL $SIGNED_REGISTRATIONS_FILE --account $FOUNDRY_WALLET --rpc-url $RPC_URL --broadcast

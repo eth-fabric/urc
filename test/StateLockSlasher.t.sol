@@ -16,7 +16,8 @@ import { TransactionDecoder } from "../example/lib/TransactionDecoder.sol";
 import { Registry } from "../src/Registry.sol";
 import { IRegistry } from "../src/IRegistry.sol";
 import { ISlasher } from "../src/ISlasher.sol";
-import { BLS } from "../src/lib/BLS.sol";
+import { BLS } from "solady/utils/ext/ithaca/BLS.sol";
+import { BLSUtils } from "../src/lib/BLSUtils.sol";
 import { MerkleTree } from "../src/lib/MerkleTree.sol";
 import { PreconfStructs } from "../example/PreconfStructs.sol";
 import { StateLockSlasher } from "../example/StateLockSlasher.sol";
@@ -41,7 +42,7 @@ contract StateLockSlasherTest is UnitTestHelper, PreconfStructs {
         slasher = new StateLockSlasher(slashAmountWei);
         registry = new Registry(defaultConfig());
         (committer, committerSecretKey) = makeAddrAndKey("commitmentsKey");
-        delegatePubKey = BLS.toPublicKey(SECRET_KEY_2);
+        delegatePubKey = BLSUtils.toPublicKey(SECRET_KEY_2);
         vm.deal(committer, 100 ether);
     }
 

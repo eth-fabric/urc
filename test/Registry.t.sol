@@ -4,14 +4,13 @@ pragma solidity >=0.8.0 <0.9.0;
 import "forge-std/Test.sol";
 import "../src/Registry.sol";
 import "../src/IRegistry.sol";
-import { BLS } from "../src/lib/BLS.sol";
+import { BLS } from "solady/utils/ext/ithaca/BLS.sol";
+import { BLSUtils } from "../src/lib/BLSUtils.sol";
 import {
     UnitTestHelper, ReentrantRegistrationContract, ReentrantSlashableRegistrationContract
 } from "./UnitTestHelper.sol";
 
 contract RegisterTester is UnitTestHelper {
-    using BLS for *;
-
     function setUp() public {
         registry = new Registry(defaultConfig());
         vm.deal(operator, 100 ether);
@@ -133,8 +132,6 @@ contract RegisterTester is UnitTestHelper {
 }
 
 contract UnregisterTester is UnitTestHelper {
-    using BLS for *;
-
     function setUp() public {
         registry = new Registry(defaultConfig());
         vm.deal(operator, 100 ether);
@@ -190,8 +187,6 @@ contract UnregisterTester is UnitTestHelper {
 }
 
 contract OptInAndOutTester is UnitTestHelper {
-    using BLS for *;
-
     function setUp() public {
         registry = new Registry(defaultConfig());
         vm.deal(operator, 100 ether);
@@ -307,8 +302,6 @@ contract OptInAndOutTester is UnitTestHelper {
 }
 
 contract ClaimCollateralTester is UnitTestHelper {
-    using BLS for *;
-
     function setUp() public {
         registry = new Registry(defaultConfig());
         vm.deal(operator, 100 ether);
@@ -396,8 +389,6 @@ contract ClaimCollateralTester is UnitTestHelper {
 }
 
 contract AddCollateralTester is UnitTestHelper {
-    using BLS for *;
-
     function setUp() public {
         registry = new Registry(defaultConfig());
         vm.deal(operator, 100 ether);
@@ -455,8 +446,6 @@ contract AddCollateralTester is UnitTestHelper {
 }
 
 contract SlashRegistrationTester is UnitTestHelper {
-    using BLS for *;
-
     function setUp() public {
         registry = new Registry(defaultConfig());
         vm.deal(operator, 100 ether);
@@ -469,7 +458,7 @@ contract SlashRegistrationTester is UnitTestHelper {
 
         IRegistry.SignedRegistration[] memory registrations = new IRegistry.SignedRegistration[](1);
 
-        BLS.G1Point memory pubkey = BLS.toPublicKey(SECRET_KEY_1);
+        BLS.G1Point memory pubkey = BLSUtils.toPublicKey(SECRET_KEY_1);
 
         // Use a different secret key to sign the registration
         BLS.G2Point memory signature = _registrationSignature(SECRET_KEY_2, operator);
@@ -647,7 +636,7 @@ contract SlashRegistrationTester is UnitTestHelper {
 
         IRegistry.SignedRegistration[] memory registrations = new IRegistry.SignedRegistration[](1);
 
-        BLS.G1Point memory pubkey = BLS.toPublicKey(SECRET_KEY_1);
+        BLS.G1Point memory pubkey = BLSUtils.toPublicKey(SECRET_KEY_1);
 
         // Use a different secret key to sign the registration
         BLS.G2Point memory signature = _registrationSignature(SECRET_KEY_2, operator);
@@ -669,8 +658,6 @@ contract SlashRegistrationTester is UnitTestHelper {
 }
 
 contract RentrancyTester is UnitTestHelper {
-    using BLS for *;
-
     function setUp() public {
         registry = new Registry(defaultConfig());
         vm.deal(operator, 100 ether);
@@ -750,5 +737,97 @@ contract RentrancyTester is UnitTestHelper {
         // operator can slash the registration
         vm.startPrank(operator);
         registry.slashRegistration(proof);
+    }
+}
+
+contract RegisterGasTest is UnitTestHelper {
+    function setUp() public {
+        registry = new Registry(defaultConfig());
+        vm.deal(operator, 100 ether);
+    }
+
+    function registrations(uint256 n) internal returns (IRegistry.SignedRegistration[] memory) {
+        IRegistry.SignedRegistration[] memory registrations = new IRegistry.SignedRegistration[](n);
+        for (uint256 i = 0; i < n; i++) {
+            registrations[i] = _createSignedRegistration(SECRET_KEY_1 + i, operator);
+        }
+        return registrations;
+    }
+
+    function test_gas_register_1() public {
+        IRegistry.SignedRegistration[] memory registrations = registrations(1);
+        vm.resetGasMetering();
+        vm.startPrank(operator);
+        registry.register{ value: registry.getConfig().minCollateralWei }(registrations, operator);
+    }
+
+    function test_gas_register_2() public {
+        IRegistry.SignedRegistration[] memory registrations = registrations(2);
+        vm.resetGasMetering();
+        vm.startPrank(operator);
+        registry.register{ value: registry.getConfig().minCollateralWei }(registrations, operator);
+    }
+
+    function test_gas_register_4() public {
+        IRegistry.SignedRegistration[] memory registrations = registrations(4);
+        vm.resetGasMetering();
+        vm.startPrank(operator);
+        registry.register{ value: registry.getConfig().minCollateralWei }(registrations, operator);
+    }
+
+    function test_gas_register_8() public {
+        IRegistry.SignedRegistration[] memory registrations = registrations(8);
+        vm.resetGasMetering();
+        vm.startPrank(operator);
+        registry.register{ value: registry.getConfig().minCollateralWei }(registrations, operator);
+    }
+
+    function test_gas_register_16() public {
+        IRegistry.SignedRegistration[] memory registrations = registrations(16);
+        vm.resetGasMetering();
+        vm.startPrank(operator);
+        registry.register{ value: registry.getConfig().minCollateralWei }(registrations, operator);
+    }
+
+    function test_gas_register_32() public {
+        IRegistry.SignedRegistration[] memory registrations = registrations(32);
+        vm.resetGasMetering();
+        vm.startPrank(operator);
+        registry.register{ value: registry.getConfig().minCollateralWei }(registrations, operator);
+    }
+
+    function test_gas_register_64() public {
+        IRegistry.SignedRegistration[] memory registrations = registrations(64);
+        vm.resetGasMetering();
+        vm.startPrank(operator);
+        registry.register{ value: registry.getConfig().minCollateralWei }(registrations, operator);
+    }
+
+    function test_gas_register_128() public {
+        IRegistry.SignedRegistration[] memory registrations = registrations(128);
+        vm.resetGasMetering();
+        vm.startPrank(operator);
+        registry.register{ value: registry.getConfig().minCollateralWei }(registrations, operator);
+    }
+
+    function test_gas_register_256() public {
+        IRegistry.SignedRegistration[] memory registrations = registrations(256);
+        vm.resetGasMetering();
+        vm.startPrank(operator);
+        registry.register{ value: registry.getConfig().minCollateralWei }(registrations, operator);
+    }
+
+    function test_gas_register_512() public {
+        IRegistry.SignedRegistration[] memory registrations = registrations(512);
+        vm.resetGasMetering();
+        vm.startPrank(operator);
+        registry.register{ value: registry.getConfig().minCollateralWei }(registrations, operator);
+    }
+
+    function test_gas_register_1024() public {
+        IRegistry.SignedRegistration[] memory registrations = registrations(1024);
+        vm.resetGasMetering();
+        vm.startPrank(operator);
+        registry.register{ value: registry.getConfig().minCollateralWei }(registrations, operator);
     }
 }

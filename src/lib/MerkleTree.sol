@@ -2,6 +2,9 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 import "@openzeppelin/contracts/utils/math/Math.sol";
+import { MerkleTreeLib } from "solady/utils/MerkleTreeLib.sol";
+import { MerkleProofLib } from "solady/utils/MerkleProofLib.sol";
+import { IRegistry } from "../IRegistry.sol";
 
 /**
  * @title MerkleTree
@@ -13,160 +16,100 @@ library MerkleTree {
     error LeavesTooLarge();
     /**
      * @dev Generates a complete Merkle tree from an array of leaves
-     * @dev The tree size is limited to 256 leaves
+     * @dev Will pad leaves to the next power of 2
      * @param leaves Array of leaf values
      * @return bytes32 Root hash of the Merkle tree
      */
 
     function generateTree(bytes32[] memory leaves) internal pure returns (bytes32) {
-        if (leaves.length == 0) revert EmptyLeaves();
-        if (leaves.length == 1) return leaves[0];
-
-        uint256 _nextPowerOfTwo = nextPowerOfTwo(leaves.length);
-        bytes32[] memory nodes = new bytes32[](_nextPowerOfTwo);
-
-        // Fill leaf nodes
-        for (uint256 i = 0; i < leaves.length; i++) {
-            nodes[i] = leaves[i];
-        }
-
-        // Build up the tree
-        uint256 n = _nextPowerOfTwo;
-        while (n > 1) {
-            for (uint256 i = 0; i < n / 2; i++) {
-                nodes[i] = _efficientKeccak256(nodes[2 * i], nodes[2 * i + 1]);
-            }
-            n = n / 2;
-        }
-
-        return nodes[0];
+        return MerkleTreeLib.root(MerkleTreeLib.build(MerkleTreeLib.pad(leaves)));
     }
 
     /**
      * @dev Generates a Merkle proof for a leaf at the given index
-     * @param leaves Array of leaf values
+     * @param leaves Array of unpadded leaf values
      * @param index Index of the leaf to generate proof for
      * @return bytes32[] Array of proof elements
      */
     function generateProof(bytes32[] memory leaves, uint256 index) internal pure returns (bytes32[] memory) {
-        if (index >= leaves.length) revert IndexOutOfBounds();
-        if (leaves.length <= 1) return new bytes32[](0);
-
-        uint256 _nextPowerOfTwo = nextPowerOfTwo(leaves.length);
-
-        // Calculate height of tree (log2 of next power of 2)
-        uint256 height = 0;
-        uint256 size = _nextPowerOfTwo;
-        while (size > 1) {
-            height++;
-            size /= 2;
-        }
-
-        bytes32[] memory nodes = new bytes32[](_nextPowerOfTwo);
-        bytes32[] memory proof = new bytes32[](height); // <-- This is the key fix
-
-        // Fill leaf nodes
-        for (uint256 i = 0; i < leaves.length; i++) {
-            nodes[i] = leaves[i];
-        }
-        // Fill remaining nodes with zero
-        for (uint256 i = leaves.length; i < _nextPowerOfTwo; i++) {
-            nodes[i] = bytes32(0);
-        }
-
-        uint256 proofIndex = 0;
-        uint256 levelSize = _nextPowerOfTwo;
-        uint256 currentIndex = index;
-
-        // Build proof level by level
-        while (levelSize > 1) {
-            uint256 siblingIndex = currentIndex ^ 1; // Get sibling index
-            proof[proofIndex++] = nodes[siblingIndex];
-
-            // Calculate next level
-            for (uint256 i = 0; i < levelSize / 2; i++) {
-                nodes[i] = _efficientKeccak256(nodes[2 * i], nodes[2 * i + 1]);
-            }
-            levelSize /= 2;
-            currentIndex /= 2;
-        }
-
-        return proof;
+        bytes32[] memory tree = MerkleTreeLib.build(MerkleTreeLib.pad(leaves));
+        return MerkleTreeLib.leafProof(tree, index);
     }
 
     /**
      * @dev Verifies a Merkle proof for a leaf
      * @param root Root hash of the Merkle tree
      * @param leaf Leaf value being proved
-     * @param index Index of the leaf in the tree
      * @param proof Array of proof elements
      * @return bool True if the proof is valid, false otherwise
      */
-    function verifyProof(bytes32 root, bytes32 leaf, uint256 index, bytes32[] memory proof)
-        internal
-        pure
-        returns (bool)
-    {
-        bytes32 computedHash = leaf;
-
-        for (uint256 i = 0; i < proof.length; i++) {
-            if (index % 2 == 0) {
-                computedHash = _efficientKeccak256(computedHash, proof[i]);
-            } else {
-                computedHash = _efficientKeccak256(proof[i], computedHash);
-            }
-            index = index / 2;
-        }
-
-        return computedHash == root;
+    function verifyProof(bytes32 root, bytes32 leaf, bytes32[] memory proof) internal pure returns (bool) {
+        return MerkleProofLib.verify(proof, root, leaf);
     }
 
     /**
      * @dev Verifies a Merkle proof for a leaf
      * @param root Root hash of the Merkle tree
      * @param leaf Leaf value being proved
-     * @param index Index of the leaf in the tree
      * @param proof Array of proof elements
      * @return bool True if the proof is valid, false otherwise
      */
-    function verifyProofCalldata(bytes32 root, bytes32 leaf, uint256 index, bytes32[] calldata proof)
+    function verifyProofCalldata(bytes32 root, bytes32 leaf, bytes32[] calldata proof) internal pure returns (bool) {
+        return MerkleProofLib.verifyCalldata(proof, root, leaf);
+    }
+
+    /// @notice Computes Merkle tree leaves from an array of `SignedRegistration` structs and an owner address.
+    /// @dev Each leaf is computed as `keccak256(abi.encode(reg, owner))`.
+    /// This function replicates the behavior of the following Solidity loop using inline assembly for gas efficiency:
+    ///
+    /// ```solidity
+    /// bytes32[] memory leaves = new bytes32[](regs.length);
+    /// for (uint256 i = 0; i < regs.length; i++) {
+    ///     leaves[i] = keccak256(abi.encode(regs[i], owner));
+    /// }
+    /// ```
+    ///
+    /// The encoding consists of:
+    /// - 384 bytes for the `SignedRegistration` struct (G1 + G2 BLS points)
+    /// - 32 bytes for the owner address (20-byte value left-padded with 12 zero bytes)
+    ///
+    /// @param regs The array of `SignedRegistration` structs to hash
+    /// @param owner The operator’s address to include in the leaf
+    /// @return leaves The resulting array of hashed leaf nodes
+    function hashToLeaves(IRegistry.SignedRegistration[] calldata regs, address owner)
         internal
         pure
-        returns (bool)
+        returns (bytes32[] memory leaves)
     {
-        bytes32 computedHash = leaf;
+        assembly {
+            // --- Constants ---
+            let arrayLength := regs.length // Number of SignedRegistration structs
+            let structSize := 0x180 // Size of a SignedRegistration (384 bytes)
+            let encodingSize := 0x1a0 // 384 bytes (struct) + 32 bytes (address padded) = 416 bytes
 
-        for (uint256 i = 0; i < proof.length; i++) {
-            if (index % 2 == 0) {
-                computedHash = _efficientKeccak256(computedHash, proof[i]);
-            } else {
-                computedHash = _efficientKeccak256(proof[i], computedHash);
+            // --- Allocate memory for output bytes32[] leaves ---
+            leaves := mload(0x40) // Load the current free memory pointer
+            let leavesSize := add(0x20, mul(arrayLength, 0x20)) // 32 bytes for length + 32 bytes per leaf
+            mstore(0x40, add(leaves, leavesSize)) // Allocate memory for leaves array
+            mstore(leaves, arrayLength) // Store the array length at the start of `leaves`
+
+            // --- Allocate scratch space for encoding one (struct, address) pair ---
+            let tempBuffer := mload(0x40) // Load updated free memory pointer
+            mstore(0x40, add(tempBuffer, encodingSize)) // Reserve space for buffer (416 bytes)
+
+            let leavesPtr := add(leaves, 0x20) // Pointer to first leaf slot (after length)
+
+            // --- Loop through each SignedRegistration ---
+            for { let i := 0 } lt(i, arrayLength) { i := add(i, 1) } {
+                // Copy packed SignedRegistration data directly from calldata to temp buffer
+                calldatacopy(tempBuffer, add(regs.offset, mul(i, structSize)), structSize)
+
+                // Append left-padded 20-byte address to the buffer
+                mstore(add(tempBuffer, structSize), owner)
+
+                // Hash and store
+                mstore(add(leavesPtr, mul(i, 0x20)), keccak256(tempBuffer, encodingSize))
             }
-            index = index / 2;
         }
-
-        return computedHash == root;
-    }
-
-    /**
-     * @dev Implementation of keccak256(abi.encode(a, b)) that doesn't allocate or expand memory.
-     * @dev From https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/utils/cryptography/Hashes.sol
-     */
-    function _efficientKeccak256(bytes32 a, bytes32 b) public pure returns (bytes32 value) {
-        assembly ("memory-safe") {
-            mstore(0x00, a)
-            mstore(0x20, b)
-            value := keccak256(0x00, 0x40)
-        }
-    }
-
-    /**
-     * @dev Returns the next power of 2 larger than the input
-     * @param x The number to find the next power of 2 for
-     * @return The next power of 2
-     */
-    function nextPowerOfTwo(uint256 x) internal pure returns (uint256) {
-        if (x <= 1) return 1;
-        return 1 << Math.log2(x, Math.Rounding.Ceil);
     }
 }

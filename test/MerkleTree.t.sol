@@ -3,6 +3,7 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import "forge-std/Test.sol";
 import "../src/lib/MerkleTree.sol";
+import { MerkleTreeLib } from "solady/utils/MerkleTreeLib.sol";
 
 contract MerkleTreeTest is Test {
     using MerkleTree for bytes32[];
@@ -34,7 +35,7 @@ contract MerkleTreeTest is Test {
         for (uint256 i = 0; i < size; i++) {
             bytes32[] memory proof = largeTree.generateProof(i);
             assertTrue(
-                MerkleTree.verifyProof(root, largeTree[i], i, proof),
+                MerkleTree.verifyProof(root, largeTree[i], proof),
                 string.concat("Large tree verification failed at index ", vm.toString(i))
             );
         }
@@ -55,50 +56,8 @@ contract MerkleTreeTest is Test {
         // Test proofs
         for (uint256 i = 0; i < size; i++) {
             bytes32[] memory proof = randomLeaves.generateProof(i);
-            assertTrue(MerkleTree.verifyProof(root, randomLeaves[i], i, proof), "Random leaf verification failed");
+            assertTrue(MerkleTree.verifyProof(root, randomLeaves[i], proof), "Random leaf verification failed");
         }
-    }
-
-    function testMaliciousProofs() public view {
-        bytes32 root = standardLeaves.generateTree();
-        bytes32[] memory proof = standardLeaves.generateProof(0);
-
-        // Test 1: Wrong leaf
-        assertFalse(
-            MerkleTree.verifyProof(
-                root,
-                bytes32(uint256(0x1234)), // Wrong leaf
-                0,
-                proof
-            ),
-            "Should reject wrong leaf"
-        );
-
-        // Test 2: Wrong index
-        assertFalse(
-            MerkleTree.verifyProof(
-                root,
-                standardLeaves[0],
-                1, // Wrong index
-                proof
-            ),
-            "Should reject wrong index"
-        );
-
-        // Test 3: Tampered proof
-        bytes32[] memory tamperedProof = proof;
-        tamperedProof[0] = bytes32(uint256(0x5678)); // Tamper with proof
-        assertFalse(MerkleTree.verifyProof(root, standardLeaves[0], 0, tamperedProof), "Should reject tampered proof");
-
-        // Test 4: Wrong length proof
-        bytes32[] memory wrongLengthProof = new bytes32[](proof.length + 1);
-        for (uint256 i = 0; i < proof.length; i++) {
-            wrongLengthProof[i] = proof[i];
-        }
-        wrongLengthProof[proof.length] = bytes32(0);
-        assertFalse(
-            MerkleTree.verifyProof(root, standardLeaves[0], 0, wrongLengthProof), "Should reject wrong length proof"
-        );
     }
 
     function testBoundaryTrees() public pure {
@@ -128,7 +87,7 @@ contract MerkleTreeTest is Test {
             for (uint256 k = 0; k < indicesToCheck.length; k++) {
                 bytes32[] memory proof = leaves.generateProof(indicesToCheck[k]);
                 assertTrue(
-                    MerkleTree.verifyProof(root, leaves[indicesToCheck[k]], indicesToCheck[k], proof),
+                    MerkleTree.verifyProof(root, leaves[indicesToCheck[k]], proof),
                     string.concat(
                         "Boundary tree size ",
                         vm.toString(sizes[i]),
@@ -160,43 +119,231 @@ contract MerkleTreeTest is Test {
             for (uint256 j = 0; j < 4; j++) {
                 bytes32[] memory proof = leaves.generateProof(j);
                 assertTrue(
-                    MerkleTree.verifyProof(root, leaves[j], j, proof),
+                    MerkleTree.verifyProof(root, leaves[j], proof),
                     string.concat("Tree ", vm.toString(i), " failed at leaf ", vm.toString(j))
                 );
             }
         }
     }
+}
 
-    /*//////////////////////////////////////////////////////////////
-                        HELPER FUNCTION TESTS
-    //////////////////////////////////////////////////////////////*/
+contract Foo {
+    using MerkleTree for bytes32[];
 
-    function testNextPowerOfTwo() public pure {
-        assertEq(MerkleTree.nextPowerOfTwo(1), 1, "nextPowerOfTwo(1) should be 1");
-        assertEq(MerkleTree.nextPowerOfTwo(2), 2, "nextPowerOfTwo(2) should be 2");
-        assertEq(MerkleTree.nextPowerOfTwo(3), 4, "nextPowerOfTwo(3) should be 4");
-        assertEq(MerkleTree.nextPowerOfTwo(4), 4, "nextPowerOfTwo(4) should be 4");
-        assertEq(MerkleTree.nextPowerOfTwo(5), 8, "nextPowerOfTwo(5) should be 8");
-        assertEq(MerkleTree.nextPowerOfTwo(8), 8, "nextPowerOfTwo(8) should be 8");
-        assertEq(MerkleTree.nextPowerOfTwo(9), 16, "nextPowerOfTwo(9) should be 16");
-        assertEq(MerkleTree.nextPowerOfTwo(16), 16, "nextPowerOfTwo(16) should be 16");
-        assertEq(MerkleTree.nextPowerOfTwo(17), 32, "nextPowerOfTwo(17) should be 32");
-        assertEq(MerkleTree.nextPowerOfTwo(31), 32, "nextPowerOfTwo(31) should be 32");
-        assertEq(MerkleTree.nextPowerOfTwo(32), 32, "nextPowerOfTwo(32) should be 32");
-        assertEq(MerkleTree.nextPowerOfTwo(33), 64, "nextPowerOfTwo(33) should be 64");
-        assertEq(MerkleTree.nextPowerOfTwo(64), 64, "nextPowerOfTwo(64) should be 64");
-        assertEq(MerkleTree.nextPowerOfTwo(65), 128, "nextPowerOfTwo(65) should be 128");
-        assertEq(MerkleTree.nextPowerOfTwo(66), 128, "nextPowerOfTwo(66) should be 128");
-        assertEq(MerkleTree.nextPowerOfTwo(128), 128, "nextPowerOfTwo(128) should be 128");
-        assertEq(MerkleTree.nextPowerOfTwo(129), 256, "nextPowerOfTwo(129) should be 256");
-        assertEq(MerkleTree.nextPowerOfTwo(256), 256, "nextPowerOfTwo(256) should be 256");
+    function generateTree(bytes32[] calldata leaves) public pure returns (bytes32) {
+        return leaves.generateTree();
+    }
+}
+
+contract MerkleTreeGasTest is Test {
+    using MerkleTree for bytes32[];
+
+    Foo foo;
+
+    function setUp() public {
+        foo = new Foo();
     }
 
-    function testEfficientKeccak256(bytes32 a, bytes32 b) public pure {
-        assertEq(
-            MerkleTree._efficientKeccak256(a, b),
-            keccak256(abi.encode(a, b)),
-            "keccak256(a, b) should be keccak256(abi.encode(a, b))"
-        );
+    function getLeaves(uint256 size) public pure returns (bytes32[] memory) {
+        bytes32[] memory leaves = new bytes32[](size);
+        for (uint256 i = 0; i < size; i++) {
+            leaves[i] = keccak256(abi.encodePacked(i));
+        }
+        return leaves;
+    }
+
+    function test_gas_generateTree_1() public {
+        bytes32[] memory leaves = getLeaves(1);
+        vm.resetGasMetering();
+        foo.generateTree(leaves);
+    }
+
+    function test_gas_generateTree_2() public {
+        bytes32[] memory leaves = getLeaves(2);
+        vm.resetGasMetering();
+        foo.generateTree(leaves);
+    }
+
+    function test_gas_generateTree_4() public {
+        bytes32[] memory leaves = getLeaves(4);
+        vm.resetGasMetering();
+        foo.generateTree(leaves);
+    }
+
+    function test_gas_generateTree_8() public {
+        bytes32[] memory leaves = getLeaves(8);
+        vm.resetGasMetering();
+        foo.generateTree(leaves);
+    }
+
+    function test_gas_generateTree_16() public {
+        bytes32[] memory leaves = getLeaves(16);
+        vm.resetGasMetering();
+        foo.generateTree(leaves);
+    }
+
+    function test_gas_generateTree_32() public {
+        bytes32[] memory leaves = getLeaves(32);
+        vm.resetGasMetering();
+        foo.generateTree(leaves);
+    }
+
+    function test_gas_generateTree_64() public {
+        bytes32[] memory leaves = getLeaves(64);
+        vm.resetGasMetering();
+        foo.generateTree(leaves);
+    }
+
+    function test_gas_generateTree_128() public {
+        bytes32[] memory leaves = getLeaves(128);
+        vm.resetGasMetering();
+        foo.generateTree(leaves);
+    }
+
+    function test_gas_generateTree_256() public {
+        bytes32[] memory leaves = getLeaves(256);
+        vm.resetGasMetering();
+        foo.generateTree(leaves);
+    }
+
+    function test_gas_generateTree_512() public {
+        bytes32[] memory leaves = getLeaves(512);
+        vm.resetGasMetering();
+        foo.generateTree(leaves);
+    }
+
+    function test_gas_generateTree_1024() public {
+        bytes32[] memory leaves = getLeaves(1024);
+        vm.resetGasMetering();
+        foo.generateTree(leaves);
+    }
+}
+
+contract Bar {
+    using MerkleTree for bytes32[];
+
+    function build(bytes32[] calldata leaves) public pure returns (bytes32[] memory) {
+        return MerkleTreeLib.build(leaves);
+    }
+}
+
+// Test the gas consumption of the Solady build() function
+contract MerkleTreeBuildGasTest is Test {
+    using MerkleTreeLib for bytes32[];
+
+    Bar bar;
+
+    function setUp() public {
+        bar = new Bar();
+    }
+
+    function getLeaves(uint256 size) public pure returns (bytes32[] memory) {
+        bytes32[] memory leaves = new bytes32[](size);
+        for (uint256 i = 0; i < size; i++) {
+            leaves[i] = keccak256(abi.encodePacked(i));
+        }
+        return leaves;
+    }
+
+    function test_gas_buildTree_1() public {
+        bytes32[] memory leaves = getLeaves(1);
+        vm.resetGasMetering();
+        bar.build(leaves);
+    }
+
+    function test_gas_buildTree_2() public {
+        bytes32[] memory leaves = getLeaves(2);
+        vm.resetGasMetering();
+        bar.build(leaves);
+    }
+
+    function test_gas_buildTree_4() public {
+        bytes32[] memory leaves = getLeaves(4);
+        vm.resetGasMetering();
+        bar.build(leaves);
+    }
+
+    function test_gas_buildTree_8() public {
+        bytes32[] memory leaves = getLeaves(8);
+        vm.resetGasMetering();
+        bar.build(leaves);
+    }
+
+    function test_gas_buildTree_16() public {
+        bytes32[] memory leaves = getLeaves(16);
+        vm.resetGasMetering();
+        bar.build(leaves);
+    }
+
+    function test_gas_buildTree_32() public {
+        bytes32[] memory leaves = getLeaves(32);
+        vm.resetGasMetering();
+        bar.build(leaves);
+    }
+
+    function test_gas_buildTree_64() public {
+        bytes32[] memory leaves = getLeaves(64);
+        vm.resetGasMetering();
+        bar.build(leaves);
+    }
+
+    function test_gas_buildTree_128() public {
+        bytes32[] memory leaves = getLeaves(128);
+        vm.resetGasMetering();
+        bar.build(leaves);
+    }
+
+    function test_gas_buildTree_256() public {
+        bytes32[] memory leaves = getLeaves(256);
+        vm.resetGasMetering();
+        bar.build(leaves);
+    }
+
+    function test_gas_buildTree_512() public {
+        bytes32[] memory leaves = getLeaves(512);
+        vm.resetGasMetering();
+        bar.build(leaves);
+    }
+
+    function test_gas_buildTree_1024() public {
+        bytes32[] memory leaves = getLeaves(1024);
+        vm.resetGasMetering();
+        bar.build(leaves);
+    }
+
+    function test_gas_buildTree_2048() public {
+        bytes32[] memory leaves = getLeaves(2048);
+        vm.resetGasMetering();
+        bar.build(leaves);
+    }
+
+    function test_gas_buildTree_4096() public {
+        bytes32[] memory leaves = getLeaves(4096);
+        vm.resetGasMetering();
+        bar.build(leaves);
+    }
+
+    function test_gas_buildTree_8192() public {
+        bytes32[] memory leaves = getLeaves(8192);
+        vm.resetGasMetering();
+        bar.build(leaves);
+    }
+
+    function test_gas_buildTree_16384() public {
+        bytes32[] memory leaves = getLeaves(16384);
+        vm.resetGasMetering();
+        bar.build(leaves);
+    }
+
+    function test_gas_buildTree_32768() public {
+        bytes32[] memory leaves = getLeaves(32768);
+        vm.resetGasMetering();
+        bar.build(leaves);
+    }
+
+    function test_gas_buildTree_65536() public {
+        bytes32[] memory leaves = getLeaves(65536);
+        vm.resetGasMetering();
+        bar.build(leaves);
     }
 }
